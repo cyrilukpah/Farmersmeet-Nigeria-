@@ -1,4 +1,4 @@
-name: Build FarmersMeet Nigeria
+name: Build FarmersMeet APK
 
 on:
   workflow_dispatch:
@@ -11,19 +11,32 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Create FarmersMeet project
-        shell: bash
-        run: |
-          set -e
+      - name: Checkout
+        uses: actions/checkout@v4
 
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Create clean FarmersMeet project
+        run: |
+          rm -rf FarmersMeet
           mkdir -p FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria
           mkdir -p FarmersMeet/app/src/main/res/layout
           mkdir -p FarmersMeet/app/src/main/res/values
           mkdir -p FarmersMeet/app/src/main/res/drawable
 
-          cd FarmersMeet
-
-          cat > settings.gradle <<'EOF'
+          cat > FarmersMeet/settings.gradle <<'EOF'
           pluginManagement {
               repositories {
                   google()
@@ -44,20 +57,19 @@ jobs:
           include(":app")
           EOF
 
-          cat > build.gradle <<'EOF'
+          cat > FarmersMeet/build.gradle <<'EOF'
           plugins {
               id 'com.android.application' version '8.7.3' apply false
               id 'org.jetbrains.kotlin.android' version '2.0.21' apply false
           }
           EOF
 
-          cat > gradle.properties <<'EOF'
-          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          cat > FarmersMeet/gradle.properties <<'EOF'
           android.useAndroidX=true
-          kotlin.code.style=official
+          android.nonTransitiveRClass=true
           EOF
 
-          cat > app/build.gradle <<'EOF'
+          cat > FarmersMeet/app/build.gradle <<'EOF'
           plugins {
               id 'com.android.application'
               id 'org.jetbrains.kotlin.android'
@@ -71,8 +83,8 @@ jobs:
                   applicationId 'ng.farmersmeet.nigeria'
                   minSdk 24
                   targetSdk 35
-                  versionCode 4
-                  versionName '4.0'
+                  versionCode 1
+                  versionName '2.1'
               }
 
               compileOptions {
@@ -93,15 +105,13 @@ jobs:
           }
           EOF
 
-          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          cat > FarmersMeet/app/src/main/AndroidManifest.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
               <application
-                  android:allowBackup="true"
-                  android:label="FarmersMeet Nigeria"
-                  android:supportsRtl="true"
-                  android:theme="@style/AppTheme">
+                  android:theme="@style/AppTheme"
+                  android:label="FarmersMeet">
 
                   <activity
                       android:name=".ProductActivity"
@@ -135,166 +145,114 @@ jobs:
           </manifest>
           EOF
 
-          cat > app/src/main/res/values/colors.xml <<'EOF'
+          cat > FarmersMeet/app/src/main/res/values/colors.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <color name="farm_green">#176B35</color>
-              <color name="farm_green_dark">#0D4D25</color>
+              <color name="farm_dark_green">#0D4D25</color>
               <color name="farm_yellow">#F4C430</color>
-              <color name="farm_white">#FFFFFF</color>
               <color name="farm_background">#F7FAF5</color>
-              <color name="farm_text">#18321F</color>
-              <color name="farm_card">#FFFFFF</color>
+              <color name="farm_white">#FFFFFF</color>
+              <color name="farm_text">#18351F</color>
           </resources>
           EOF
 
-          cat > app/src/main/res/values/styles.xml <<'EOF'
+          cat > FarmersMeet/app/src/main/res/values/themes.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <style name="AppTheme" parent="Theme.Material3.Light.NoActionBar">
+              <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
                   <item name="android:fontFamily">sans</item>
-                  <item name="android:colorAccent">@color/farm_yellow</item>
-                  <item name="android:statusBarColor">@color/farm_green_dark</item>
-                  <item name="android:navigationBarColor">@color/farm_green_dark</item>
-                  <item name="android:windowLightStatusBar">false</item>
-                  <item name="android:windowBackground">@color/farm_background</item>
+                  <item name="android:colorAccent">@color/farm_green</item>
+                  <item name="android:navigationBarColor">@color/farm_dark_green</item>
+                  <item name="android:statusBarColor">@color/farm_dark_green</item>
               </style>
           </resources>
           EOF
 
-          cat > app/src/main/res/drawable/button_green.xml <<'EOF'
+          cat > FarmersMeet/app/src/main/res/drawable/button_green.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <shape xmlns:android="http://schemas.android.com/apk/res/android">
-              <corners android:radius="12dp" />
               <solid android:color="@color/farm_green" />
+              <corners android:radius="10dp" />
               <padding
-                  android:left="16dp"
-                  android:top="12dp"
-                  android:right="16dp"
-                  android:bottom="12dp" />
+                  android:left="10dp"
+                  android:right="10dp"
+                  android:top="8dp"
+                  android:bottom="8dp" />
           </shape>
           EOF
 
-          cat > app/src/main/res/drawable/button_yellow.xml <<'EOF'
+          cat > FarmersMeet/app/src/main/res/drawable/button_yellow.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <shape xmlns:android="http://schemas.android.com/apk/res/android">
-              <corners android:radius="12dp" />
               <solid android:color="@color/farm_yellow" />
+              <corners android:radius="10dp" />
               <padding
-                  android:left="16dp"
-                  android:top="12dp"
-                  android:right="16dp"
-                  android:bottom="12dp" />
+                  android:left="10dp"
+                  android:right="10dp"
+                  android:top="8dp"
+                  android:bottom="8dp" />
           </shape>
           EOF
 
-          cat > app/src/main/res/drawable/card_background.xml <<'EOF'
+          cat > FarmersMeet/app/src/main/res/drawable/card_background.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <shape xmlns:android="http://schemas.android.com/apk/res/android">
-              <corners android:radius="14dp" />
-              <solid android:color="@color/farm_card" />
+              <solid android:color="@color/farm_white" />
+              <corners android:radius="12dp" />
               <stroke
                   android:width="1dp"
-                  android:color="#DCE8DC" />
+                  android:color="#D5E4D7" />
               <padding
-                  android:left="18dp"
-                  android:top="18dp"
-                  android:right="18dp"
-                  android:bottom="18dp" />
+                  android:left="4dp"
+                  android:right="4dp"
+                  android:top="4dp"
+                  android:bottom="4dp" />
           </shape>
           EOF
 
-          cat > app/src/main/res/layout/activity_main.xml <<'EOF'
+          cat > FarmersMeet/app/src/main/res/layout/activity_main.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout
               xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
               android:layout_height="match_parent"
               android:orientation="vertical"
+              android:gravity="center"
+              android:padding="28dp"
               android:background="@color/farm_background">
 
-              <LinearLayout
-                  android:layout_width="match_parent"
-                  android:layout_height="190dp"
-                  android:orientation="vertical"
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="FarmersMeet"
+                  android:textColor="@color/farm_green"
+                  android:textSize="38sp"
+                  android:textStyle="bold" />
+
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="Connecting farmers, buyers and agricultural businesses"
+                  android:textColor="@color/farm_text"
+                  android:textSize="16sp"
                   android:gravity="center"
-                  android:background="@color/farm_green"
-                  android:padding="24dp">
+                  android:layout_marginTop="10dp" />
 
-                  <TextView
-                      android:layout_width="wrap_content"
-                      android:layout_height="wrap_content"
-                      android:text="FarmersMeet"
-                      android:textColor="@color/farm_yellow"
-                      android:textSize="34sp"
-                      android:textStyle="bold" />
-
-                  <TextView
-                      android:layout_width="wrap_content"
-                      android:layout_height="wrap_content"
-                      android:text="NIGERIA"
-                      android:textColor="@color/farm_white"
-                      android:textSize="18sp"
-                      android:textStyle="bold" />
-
-                  <TextView
-                      android:layout_width="wrap_content"
-                      android:layout_height="wrap_content"
-                      android:text="Connect • Buy • Sell • Grow"
-                      android:textColor="@color/farm_white"
-                      android:textSize="15sp"
-                      android:layout_marginTop="8dp" />
-
-              </LinearLayout>
-
-              <LinearLayout
+              <Button
+                  android:id="@+id/marketplaceButton"
                   android:layout_width="match_parent"
-                  android:layout_height="match_parent"
-                  android:orientation="vertical"
-                  android:padding="24dp">
-
-                  <TextView
-                      android:layout_width="wrap_content"
-                      android:layout_height="wrap_content"
-                      android:text="Welcome to FarmersMeet"
-                      android:textColor="@color/farm_text"
-                      android:textSize="23sp"
-                      android:textStyle="bold" />
-
-                  <TextView
-                      android:layout_width="wrap_content"
-                      android:layout_height="wrap_content"
-                      android:text="Nigeria's agricultural marketplace"
-                      android:textColor="@color/farm_text"
-                      android:textSize="16sp"
-                      android:layout_marginTop="7dp"
-                      android:layout_marginBottom="28dp" />
-
-                  <Button
-                      android:id="@+id/marketplaceButton"
-                      android:layout_width="match_parent"
-                      android:layout_height="wrap_content"
-                      android:text="ENTER MARKETPLACE"
-                      android:textColor="@color/farm_white"
-                      android:textStyle="bold"
-                      android:background="@drawable/button_green" />
-
-                  <Button
-                      android:id="@+id/sellButton"
-                      android:layout_width="match_parent"
-                      android:layout_height="wrap_content"
-                      android:text="SELL AN ITEM"
-                      android:textColor="@color/farm_text"
-                      android:textStyle="bold"
-                      android:background="@drawable/button_yellow"
-                      android:layout_marginTop="14dp" />
-
-              </LinearLayout>
+                  android:layout_height="wrap_content"
+                  android:text="ENTER MARKETPLACE"
+                  android:textColor="@color/farm_text"
+                  android:textStyle="bold"
+                  android:background="@drawable/button_yellow"
+                  android:layout_marginTop="35dp" />
 
           </LinearLayout>
           EOF
 
-          cat > app/src/main/res/layout/activity_marketplace.xml <<'EOF'
+          cat > FarmersMeet/app/src/main/res/layout/activity_marketplace.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <ScrollView
               xmlns:android="http://schemas.android.com/apk/res/android"
@@ -309,9 +267,9 @@ jobs:
 
                   <LinearLayout
                       android:layout_width="match_parent"
-                      android:layout_height="115dp"
-                      android:gravity="center_vertical"
+                      android:layout_height="120dp"
                       android:orientation="vertical"
+                      android:gravity="center_vertical"
                       android:padding="24dp"
                       android:background="@color/farm_green">
 
@@ -328,8 +286,7 @@ jobs:
                           android:layout_height="wrap_content"
                           android:text="Buy and sell agricultural products"
                           android:textColor="@color/farm_white"
-                          android:textSize="15sp"
-                          android:layout_marginTop="4dp" />
+                          android:textSize="15sp" />
 
                   </LinearLayout>
 
@@ -346,7 +303,7 @@ jobs:
                           android:textColor="@color/farm_text"
                           android:textSize="21sp"
                           android:textStyle="bold"
-                          android:layout_marginBottom="16dp" />
+                          android:layout_marginBottom="14dp" />
 
                       <Button
                           android:id="@+id/cropsButton"
@@ -357,10 +314,28 @@ jobs:
                           android:background="@drawable/button_green" />
 
                       <Button
+                          android:id="@+id/pigsButton"
+                          android:layout_width="match_parent"
+                          android:layout_height="wrap_content"
+                          android:text="Pigs and Piglets"
+                          android:textColor="@color/farm_white"
+                          android:background="@drawable/button_green"
+                          android:layout_marginTop="10dp" />
+
+                      <Button
+                          android:id="@+id/fishButton"
+                          android:layout_width="match_parent"
+                          android:layout_height="wrap_content"
+                          android:text="Fish and Aquaculture"
+                          android:textColor="@color/farm_white"
+                          android:background="@drawable/button_green"
+                          android:layout_marginTop="10dp" />
+
+                      <Button
                           android:id="@+id/livestockButton"
                           android:layout_width="match_parent"
                           android:layout_height="wrap_content"
-                          android:text="Livestock"
+                          android:text="Other Livestock"
                           android:textColor="@color/farm_white"
                           android:background="@drawable/button_green"
                           android:layout_marginTop="10dp" />
@@ -403,63 +378,11 @@ jobs:
                           android:layout_marginTop="22dp" />
 
                   </LinearLayout>
-
               </LinearLayout>
           </ScrollView>
           EOF
 
-          cat > app/src/main/res/layout/activity_listings.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout
-              xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:orientation="vertical"
-              android:background="@color/farm_background">
-
-              <LinearLayout
-                  android:layout_width="match_parent"
-                  android:layout_height="105dp"
-                  android:orientation="vertical"
-                  android:gravity="center_vertical"
-                  android:padding="22dp"
-                  android:background="@color/farm_green">
-
-                  <TextView
-                      android:id="@+id/categoryTitle"
-                      android:layout_width="wrap_content"
-                      android:layout_height="wrap_content"
-                      android:textColor="@color/farm_yellow"
-                      android:textSize="26sp"
-                      android:textStyle="bold" />
-
-                  <TextView
-                      android:layout_width="wrap_content"
-                      android:layout_height="wrap_content"
-                      android:text="Available listings"
-                      android:textColor="@color/farm_white"
-                      android:textSize="14sp" />
-
-              </LinearLayout>
-
-              <ScrollView
-                  android:layout_width="match_parent"
-                  android:layout_height="0dp"
-                  android:layout_weight="1">
-
-                  <LinearLayout
-                      android:id="@+id/listingsContainer"
-                      android:layout_width="match_parent"
-                      android:layout_height="wrap_content"
-                      android:orientation="vertical"
-                      android:padding="16dp" />
-
-              </ScrollView>
-
-          </LinearLayout>
-          EOF
-
-          cat > app/src/main/res/layout/activity_product.xml <<'EOF'
+          cat > FarmersMeet/app/src/main/res/layout/activity_listings.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <ScrollView
               xmlns:android="http://schemas.android.com/apk/res/android"
@@ -471,65 +394,28 @@ jobs:
                   android:layout_width="match_parent"
                   android:layout_height="wrap_content"
                   android:orientation="vertical"
-                  android:padding="22dp">
+                  android:padding="20dp">
 
                   <TextView
-                      android:id="@+id/productName"
+                      android:id="@+id/categoryTitle"
                       android:layout_width="wrap_content"
                       android:layout_height="wrap_content"
                       android:textColor="@color/farm_green"
-                      android:textSize="30sp"
-                      android:textStyle="bold" />
-
-                  <TextView
-                      android:id="@+id/productPrice"
-                      android:layout_width="wrap_content"
-                      android:layout_height="wrap_content"
-                      android:textColor="@color/farm_green_dark"
-                      android:textSize="24sp"
+                      android:textSize="28sp"
                       android:textStyle="bold"
-                      android:layout_marginTop="14dp" />
+                      android:layout_marginBottom="18dp" />
 
-                  <TextView
-                      android:id="@+id/productLocation"
-                      android:layout_width="wrap_content"
-                      android:layout_height="wrap_content"
-                      android:textColor="@color/farm_text"
-                      android:textSize="17sp"
-                      android:layout_marginTop="12dp" />
-
-                  <TextView
-                      android:id="@+id/productSeller"
-                      android:layout_width="wrap_content"
-                      android:layout_height="wrap_content"
-                      android:textColor="@color/farm_text"
-                      android:textSize="17sp"
-                      android:layout_marginTop="8dp" />
-
-                  <TextView
-                      android:id="@+id/productDescription"
+                  <LinearLayout
+                      android:id="@+id/listingsContainer"
                       android:layout_width="match_parent"
                       android:layout_height="wrap_content"
-                      android:textColor="@color/farm_text"
-                      android:textSize="17sp"
-                      android:layout_marginTop="24dp" />
-
-                  <Button
-                      android:id="@+id/contactButton"
-                      android:layout_width="match_parent"
-                      android:layout_height="wrap_content"
-                      android:text="CONTACT SELLER"
-                      android:textColor="@color/farm_text"
-                      android:textStyle="bold"
-                      android:background="@drawable/button_yellow"
-                      android:layout_marginTop="28dp" />
+                      android:orientation="vertical" />
 
               </LinearLayout>
-
           </ScrollView>
           EOF
 
-          cat > app/src/main/res/layout/activity_sell.xml <<'EOF'
+          cat > FarmersMeet/app/src/main/res/layout/activity_sell.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <ScrollView
               xmlns:android="http://schemas.android.com/apk/res/android"
@@ -554,18 +440,31 @@ jobs:
                   <TextView
                       android:layout_width="wrap_content"
                       android:layout_height="wrap_content"
-                      android:text="Tell buyers about what you are selling."
+                      android:text="Create a marketplace listing"
                       android:textColor="@color/farm_text"
                       android:textSize="15sp"
                       android:layout_marginTop="6dp"
                       android:layout_marginBottom="20dp" />
+
+                  <TextView
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:text="Category"
+                      android:textStyle="bold"
+                      android:textColor="@color/farm_text" />
+
+                  <Spinner
+                      android:id="@+id/categorySpinner"
+                      android:layout_width="match_parent"
+                      android:layout_height="50dp"
+                      android:layout_marginTop="6dp" />
 
                   <EditText
                       android:id="@+id/itemName"
                       android:layout_width="match_parent"
                       android:layout_height="wrap_content"
                       android:hint="Product name"
-                      android:inputType="textCapSentences" />
+                      android:layout_marginTop="16dp" />
 
                   <EditText
                       android:id="@+id/itemPrice"
@@ -576,11 +475,17 @@ jobs:
                       android:layout_marginTop="10dp" />
 
                   <EditText
+                      android:id="@+id/itemQuantity"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:hint="Quantity"
+                      android:layout_marginTop="10dp" />
+
+                  <EditText
                       android:id="@+id/itemLocation"
                       android:layout_width="match_parent"
                       android:layout_height="wrap_content"
                       android:hint="Location"
-                      android:inputType="textCapSentences"
                       android:layout_marginTop="10dp" />
 
                   <EditText
@@ -589,306 +494,4 @@ jobs:
                       android:layout_height="120dp"
                       android:gravity="top"
                       android:hint="Description"
-                      android:inputType="textMultiLine"
-                      android:layout_marginTop="10dp" />
-
-                  <Button
-                      android:id="@+id/postButton"
-                      android:layout_width="match_parent"
-                      android:layout_height="wrap_content"
-                      android:text="POST LISTING"
-                      android:textColor="@color/farm_text"
-                      android:textStyle="bold"
-                      android:background="@drawable/button_yellow"
-                      android:layout_marginTop="22dp" />
-
-              </LinearLayout>
-          </ScrollView>
-          EOF
-
-          cat > app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt <<'EOF'
-          package ng.farmersmeet.nigeria
-
-          import android.content.Intent
-          import android.os.Bundle
-          import android.widget.Button
-          import androidx.appcompat.app.AppCompatActivity
-
-          class MainActivity : AppCompatActivity() {
-
-              override fun onCreate(savedInstanceState: Bundle?) {
-                  super.onCreate(savedInstanceState)
-                  setContentView(R.layout.activity_main)
-
-                  findViewById<Button>(R.id.marketplaceButton).setOnClickListener {
-                      startActivity(Intent(this, MarketplaceActivity::class.java))
-                  }
-
-                  findViewById<Button>(R.id.sellButton).setOnClickListener {
-                      startActivity(Intent(this, SellActivity::class.java))
-                  }
-              }
-          }
-          EOF
-
-          cat > app/src/main/java/ng/farmersmeet/nigeria/MarketplaceActivity.kt <<'EOF'
-          package ng.farmersmeet.nigeria
-
-          import android.content.Intent
-          import android.os.Bundle
-          import android.widget.Button
-          import androidx.appcompat.app.AppCompatActivity
-
-          class MarketplaceActivity : AppCompatActivity() {
-
-              override fun onCreate(savedInstanceState: Bundle?) {
-                  super.onCreate(savedInstanceState)
-                  setContentView(R.layout.activity_marketplace)
-
-                  val categories = listOf(
-                      R.id.cropsButton to "Crops and Farm Produce",
-                      R.id.livestockButton to "Livestock",
-                      R.id.poultryButton to "Poultry",
-                      R.id.seedsButton to "Seeds and Seedlings",
-                      R.id.equipmentButton to "Farm Equipment"
-                  )
-
-                  categories.forEach { (id, name) ->
-                      findViewById<Button>(id).setOnClickListener {
-                          val intent = Intent(this, ListingsActivity::class.java)
-                          intent.putExtra("category", name)
-                          startActivity(intent)
-                      }
-                  }
-
-                  findViewById<Button>(R.id.sellButton).setOnClickListener {
-                      startActivity(Intent(this, SellActivity::class.java))
-                  }
-              }
-          }
-          EOF
-
-          cat > app/src/main/java/ng/farmersmeet/nigeria/ListingsActivity.kt <<'EOF'
-          package ng.farmersmeet.nigeria
-
-          import android.content.Intent
-          import android.graphics.Color
-          import android.os.Bundle
-          import android.view.Gravity
-          import android.widget.Button
-          import android.widget.LinearLayout
-          import android.widget.TextView
-          import androidx.appcompat.app.AppCompatActivity
-
-          data class Listing(
-              val name: String,
-              val price: String,
-              val location: String,
-              val seller: String,
-              val description: String
-          )
-
-          class ListingsActivity : AppCompatActivity() {
-
-              override fun onCreate(savedInstanceState: Bundle?) {
-                  super.onCreate(savedInstanceState)
-                  setContentView(R.layout.activity_listings)
-
-                  val category = intent.getStringExtra("category") ?: "Marketplace"
-                  findViewById<TextView>(R.id.categoryTitle).text = category
-
-                  val container = findViewById<LinearLayout>(R.id.listingsContainer)
-
-                  val listings = when (category) {
-                      "Crops and Farm Produce" -> listOf(
-                          Listing("Fresh Maize", "₦150,000", "Abakaliki, Ebonyi", "John Farms", "Freshly harvested maize available in quantity."),
-                          Listing("Local Rice", "₦95,000", "Aba, Abia", "Green Valley Farm", "Quality local rice suitable for household and commercial use."),
-                          Listing("Cassava", "₦70,000", "Umuahia, Abia", "Chukwu Farm", "Fresh cassava available for bulk buyers.")
-                      )
-
-                      "Livestock" -> listOf(
-                          Listing("Large White Pigs", "₦180,000", "Abakaliki, Ebonyi", "Peace Pig Farm", "Healthy pigs available for breeding or meat production."),
-                          Listing("Goats", "₦120,000", "Aba, Abia", "Umuahia Livestock", "Healthy goats available for farmers and traders.")
-                      )
-
-                      "Poultry" -> listOf(
-                          Listing("Broiler Chickens", "₦8,500", "Abakaliki, Ebonyi", "Victory Poultry", "Healthy mature broilers ready for sale."),
-                          Listing("Day Old Chicks", "₦1,200", "Aba, Abia", "Sunrise Poultry", "Quality day old chicks available for farmers.")
-                      )
-
-                      "Seeds and Seedlings" -> listOf(
-                          Listing("Hybrid Maize Seeds", "₦25,000", "Enugu, Enugu", "Agro Seed Centre", "Quality hybrid maize seeds for commercial farming."),
-                          Listing("Vegetable Seedlings", "₦5,000", "Aba, Abia", "Green Garden", "Healthy vegetable seedlings ready for transplanting.")
-                      )
-
-                      else -> listOf(
-                          Listing("Knapsack Sprayer", "₦45,000", "Aba, Abia", "Agro Tools Nigeria", "Manual farm sprayer suitable for crop protection."),
-                          Listing("Water Pump", "₦120,000", "Abakaliki, Ebonyi", "Farm Equipment Hub", "Petrol water pump for irrigation and farm use.")
-                      )
-                  }
-
-                  listings.forEach { listing ->
-                      addListingCard(container, listing)
-                  }
-              }
-
-              private fun addListingCard(
-                  container: LinearLayout,
-                  listing: Listing
-              ) {
-                  val card = LinearLayout(this)
-                  card.orientation = LinearLayout.VERTICAL
-                  card.setPadding(18, 18, 18, 18)
-                  card.setBackgroundResource(R.drawable.card_background)
-
-                  val params = LinearLayout.LayoutParams(
-                      LinearLayout.LayoutParams.MATCH_PARENT,
-                      LinearLayout.LayoutParams.WRAP_CONTENT
-                  )
-                  params.setMargins(0, 0, 0, 16)
-                  card.layoutParams = params
-
-                  val name = TextView(this)
-                  name.text = listing.name
-                  name.textSize = 21f
-                  name.setTextColor(Color.parseColor("#176B35"))
-                  name.setTypeface(null, android.graphics.Typeface.BOLD)
-
-                  val price = TextView(this)
-                  price.text = listing.price
-                  price.textSize = 20f
-                  price.setTextColor(Color.parseColor("#0D4D25"))
-                  price.setTypeface(null, android.graphics.Typeface.BOLD)
-                  price.setPadding(0, 8, 0, 4)
-
-                  val location = TextView(this)
-                  location.text = "Location: ${listing.location}"
-                  location.textSize = 15f
-
-                  val seller = TextView(this)
-                  seller.text = "Seller: ${listing.seller}"
-                  seller.textSize = 15f
-                  seller.setPadding(0, 4, 0, 10)
-
-                  val button = Button(this)
-                  button.text = "VIEW DETAILS"
-                  button.setTextColor(Color.WHITE)
-                  button.setBackgroundResource(R.drawable.button_green)
-                  button.gravity = Gravity.CENTER
-
-                  button.setOnClickListener {
-                      val intent = Intent(this, ProductActivity::class.java)
-                      intent.putExtra("name", listing.name)
-                      intent.putExtra("price", listing.price)
-                      intent.putExtra("location", listing.location)
-                      intent.putExtra("seller", listing.seller)
-                      intent.putExtra("description", listing.description)
-                      startActivity(intent)
-                  }
-
-                  card.addView(name)
-                  card.addView(price)
-                  card.addView(location)
-                  card.addView(seller)
-                  card.addView(button)
-
-                  container.addView(card)
-              }
-          }
-          EOF
-
-          cat > app/src/main/java/ng/farmersmeet/nigeria/ProductActivity.kt <<'EOF'
-          package ng.farmersmeet.nigeria
-
-          import android.os.Bundle
-          import android.widget.Button
-          import android.widget.TextView
-          import android.widget.Toast
-          import androidx.appcompat.app.AppCompatActivity
-
-          class ProductActivity : AppCompatActivity() {
-
-              override fun onCreate(savedInstanceState: Bundle?) {
-                  super.onCreate(savedInstanceState)
-                  setContentView(R.layout.activity_product)
-
-                  findViewById<TextView>(R.id.productName).text =
-                      intent.getStringExtra("name") ?: ""
-
-                  findViewById<TextView>(R.id.productPrice).text =
-                      intent.getStringExtra("price") ?: ""
-
-                  findViewById<TextView>(R.id.productLocation).text =
-                      "Location: ${intent.getStringExtra("location") ?: ""}"
-
-                  findViewById<TextView>(R.id.productSeller).text =
-                      "Seller: ${intent.getStringExtra("seller") ?: ""}"
-
-                  findViewById<TextView>(R.id.productDescription).text =
-                      intent.getStringExtra("description") ?: ""
-
-                  findViewById<Button>(R.id.contactButton).setOnClickListener {
-                      Toast.makeText(
-                          this,
-                          "Seller contact will be connected in the next stage.",
-                          Toast.LENGTH_LONG
-                      ).show()
-                  }
-              }
-          }
-          EOF
-
-          cat > app/src/main/java/ng/farmersmeet/nigeria/SellActivity.kt <<'EOF'
-          package ng.farmersmeet.nigeria
-
-          import android.os.Bundle
-          import android.widget.Button
-          import android.widget.EditText
-          import android.widget.Toast
-          import androidx.appcompat.app.AppCompatActivity
-
-          class SellActivity : AppCompatActivity() {
-
-              override fun onCreate(savedInstanceState: Bundle?) {
-                  super.onCreate(savedInstanceState)
-                  setContentView(R.layout.activity_sell)
-
-                  findViewById<Button>(R.id.postButton).setOnClickListener {
-                      val item = findViewById<EditText>(R.id.itemName).text.toString().trim()
-
-                      if (item.isEmpty()) {
-                          findViewById<EditText>(R.id.itemName).error =
-                              "Enter product name"
-                          return@setOnClickListener
-                      }
-
-                      Toast.makeText(
-                          this,
-                          "Listing for $item is ready for the next stage.",
-                          Toast.LENGTH_LONG
-                      ).show()
-                  }
-              }
-          }
-          EOF
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.10'
-
-      - name: Build APK
-        working-directory: FarmersMeet
-        run: gradle :app:assembleDebug
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: FarmersMeet-marketplace-v4
-          path: FarmersMeet/app/build/outputs/apk/debug/app-debug.apk
+                      android:layout_marginTop="1
