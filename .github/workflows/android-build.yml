@@ -579,4 +579,273 @@ jobs:
                   }
 
                   return result
+                       categories
+                  )
+
+                  root.addView(categorySpinner)
+
+                  val name = field("Product name")
+                  val price = field("Price in Naira")
+                  val quantity = field("Quantity")
+                  val location = field("Location")
+                  val seller = field("Seller name")
+                  val description = field("Description")
+
+                  description.minLines = 4
+                  description.gravity = Gravity.TOP
+
+                  root.addView(name)
+                  root.addView(price)
+                  root.addView(quantity)
+                  root.addView(location)
+                  root.addView(seller)
+                  root.addView(description)
+
+                  val post = button("POST LISTING", true)
+
+                  post.setOnClickListener {
+
+                      if (
+                          name.text.toString().trim().isEmpty() ||
+                          price.text.toString().trim().isEmpty() ||
+                          quantity.text.toString().trim().isEmpty() ||
+                          location.text.toString().trim().isEmpty() ||
+                          seller.text.toString().trim().isEmpty()
+                      ) {
+                          Toast.makeText(
+                              this,
+                              "Please complete the required fields.",
+                              Toast.LENGTH_SHORT
+                          ).show()
+                          return@setOnClickListener
+                      }
+
+                      saveListing(
+                          Listing(
+                              name.text.toString().trim(),
+                              categorySpinner.selectedItem.toString(),
+                              "₦" + price.text.toString().trim(),
+                              quantity.text.toString().trim(),
+                              location.text.toString().trim(),
+                              seller.text.toString().trim(),
+                              description.text.toString().trim()
+                          )
+                      )
+
+                      Toast.makeText(
+                          this,
+                          "Listing posted successfully!",
+                          Toast.LENGTH_LONG
+                      ).show()
+
+                      showListings(categorySpinner.selectedItem.toString())
+                  }
+
+                  root.addView(post)
+
+                  val back = button("BACK TO MARKETPLACE")
+                  back.setOnClickListener {
+                      showMarketplace()
+                  }
+
+                  root.addView(back)
+
+                  scroll.addView(root)
+                  setContentView(scroll)
+              }
+
+              private fun field(hintText: String): EditText {
+                  return EditText(this).apply {
+                      hint = hintText
+                      textSize = 16f
+                      setTextColor(text)
+                      setHintTextColor(Color.GRAY)
+
+                      layoutParams = LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.MATCH_PARENT,
+                          LinearLayout.LayoutParams.WRAP_CONTENT
+                      ).apply {
+                          setMargins(0, 5, 0, 5)
+                      }
+                  }
+              }
+
+              private fun showListings(category: String) {
+                  val scroll = ScrollView(this)
+                  val root = base()
+
+                  root.addView(title(category))
+
+                  val listings = getListings().filter {
+                      it.category == category
+                  }.reversed()
+
+                  if (listings.isEmpty()) {
+                      val empty = TextView(this).apply {
+                          text = "No listings yet in this category."
+                          textSize = 17f
+                          setTextColor(text)
+                          setPadding(0, 20, 0, 20)
+                      }
+
+                      root.addView(empty)
+                  } else {
+                      listings.forEach { listing ->
+
+                          val card = LinearLayout(this).apply {
+                              orientation = LinearLayout.VERTICAL
+                              setBackgroundColor(white)
+                              setPadding(18, 18, 18, 18)
+
+                              layoutParams = LinearLayout.LayoutParams(
+                                  LinearLayout.LayoutParams.MATCH_PARENT,
+                                  LinearLayout.LayoutParams.WRAP_CONTENT
+                              ).apply {
+                                  setMargins(0, 0, 0, 16)
+                              }
+                          }
+
+                          val name = TextView(this).apply {
+                              text = listing.name
+                              textSize = 21f
+                              setTextColor(green)
+                              setTypeface(null, android.graphics.Typeface.BOLD)
+                          }
+
+                          val price = TextView(this).apply {
+                              text = listing.price
+                              textSize = 20f
+                              setTextColor(darkGreen)
+                              setTypeface(null, android.graphics.Typeface.BOLD)
+                          }
+
+                          val details = TextView(this).apply {
+                              text =
+                                  "Quantity: ${listing.quantity}\n" +
+                                  "Location: ${listing.location}\n" +
+                                  "Seller: ${listing.seller}"
+                              textSize = 15f
+                              setTextColor(text)
+                              setPadding(0, 8, 0, 8)
+                          }
+
+                          val view = button("VIEW DETAILS")
+
+                          view.setOnClickListener {
+                              showDetails(listing)
+                          }
+
+                          card.addView(name)
+                          card.addView(price)
+                          card.addView(details)
+                          card.addView(view)
+
+                          root.addView(card)
+                      }
+                  }
+
+                  val back = button("BACK TO MARKETPLACE")
+                  back.setOnClickListener {
+                      showMarketplace()
+                  }
+
+                  root.addView(back)
+
+                  scroll.addView(root)
+                  setContentView(scroll)
+              }
+
+              private fun showDetails(listing: Listing) {
+                  val root = base()
+
+                  root.addView(title(listing.name))
+
+                  val details = TextView(this).apply {
+                      text =
+                          "PRICE\n${listing.price}\n\n" +
+                          "CATEGORY\n${listing.category}\n\n" +
+                          "QUANTITY\n${listing.quantity}\n\n" +
+                          "LOCATION\n${listing.location}\n\n" +
+                          "SELLER\n${listing.seller}\n\n" +
+                          "DESCRIPTION\n${listing.description.ifEmpty { "No description provided." }}"
+                      textSize = 17f
+                      setTextColor(text)
+                      setPadding(0, 5, 0, 20)
+                  }
+
+                  root.addView(details)
+
+                  val back = button("BACK TO LISTINGS")
+                  back.setOnClickListener {
+                      showListings(listing.category)
+                  }
+
+                  root.addView(back)
+
+                  val market = button("MARKETPLACE", true)
+                  market.setOnClickListener {
+                      showMarketplace()
+                  }
+
+                  root.addView(market)
+
+                  setContentView(root)
+              }
+
+              private fun saveListing(listing: Listing) {
+                  val prefs = getSharedPreferences(
+                      "farmersmeet",
+                      Context.MODE_PRIVATE
+                  )
+
+                  val array = JSONArray(
+                      prefs.getString("listings", "[]") ?: "[]"
+                  )
+
+                  val item = JSONObject()
+
+                  item.put("name", listing.name)
+                  item.put("category", listing.category)
+                  item.put("price", listing.price)
+                  item.put("quantity", listing.quantity)
+                  item.put("location", listing.location)
+                  item.put("seller", listing.seller)
+                  item.put("description", listing.description)
+
+                  array.put(item)
+
+                  prefs.edit()
+                      .putString("listings", array.toString())
+                      .apply()
+              }
+
+              private fun getListings(): List<Listing> {
+                  val prefs = getSharedPreferences(
+                      "farmersmeet",
+                      Context.MODE_PRIVATE
+                  )
+
+                  val array = JSONArray(
+                      prefs.getString("listings", "[]") ?: "[]"
+                  )
+
+                  val result = mutableListOf<Listing>()
+
+                  for (i in 0 until array.length()) {
+                      val item = array.getJSONObject(i)
+
+                      result.add(
+                          Listing(
+                              item.optString("name"),
+                              item.optString("category"),
+                              item.optString("price"),
+                              item.optString("quantity"),
+                              item.optString("location"),
+                              item.optString("seller"),
+                              item.optString("description")
+                          )
+                      )
+                  }
+
+                  return result
              
