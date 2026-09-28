@@ -1,0 +1,17 @@
+FarmersMeet-Nigeria/
+│
+├── android/
+│   ├── app/
+│   │   ├── src/
+│   │   ├── google-services.json
+│   │   └── build.gradle
+│   │
+│   ├── build.gradle
+│   └── settings.gradle
+│
+├── functions/
+│   └── Firebase/Paystack backend
+│
+├── firestore.rules
+├── storage.rules
+└── README.md
