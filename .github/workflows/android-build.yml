@@ -11,50 +11,32 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Create FarmersMeet project
+      - name: Create fresh project
         shell: bash
         run: |
           set -e
-
           mkdir -p FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria
           mkdir -p FarmersMeet/app/src/main/res/layout
           mkdir -p FarmersMeet/app/src/main/res/values
 
           cd FarmersMeet
 
-          cat > settings.gradle <<'EOF'
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
+          printf '%s\n' \
+          'pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }' \
+          'dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }' \
+          'rootProject.name = "FarmersMeetNigeria"' \
+          'include(":app")' > settings.gradle
 
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
+          printf '%s\n' \
+          'plugins {' \
+          "    id 'com.android.application' version '8.7.3' apply false" \
+          "    id 'org.jetbrains.kotlin.android' version '2.0.21' apply false" \
+          '}' > build.gradle
 
-          rootProject.name = "FarmersMeetNigeria"
-          include(":app")
-          EOF
-
-          cat > build.gradle <<'EOF'
-          plugins {
-              id 'com.android.application' version '8.7.3' apply false
-              id 'org.jetbrains.kotlin.android' version '2.0.21' apply false
-          }
-          EOF
-
-          cat > gradle.properties <<'EOF'
-          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-          android.useAndroidX=true
-          kotlin.code.style=official
-          EOF
+          printf '%s\n' \
+          'org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8' \
+          'android.useAndroidX=true' \
+          'kotlin.code.style=official' > gradle.properties
 
           cat > app/build.gradle <<'EOF'
           plugins {
@@ -95,7 +77,6 @@ jobs:
           cat > app/src/main/AndroidManifest.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
               <application
                   android:allowBackup="true"
                   android:label="FarmersMeet Nigeria"
@@ -116,25 +97,19 @@ jobs:
                       </intent-filter>
 
                   </activity>
-
               </application>
-
           </manifest>
           EOF
 
           cat > app/src/main/res/values/styles.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <style name="AppTheme" parent="Theme.Material3.DayNight.NoActionBar">
-                  <item name="android:fontFamily">sans</item>
-                  <item name="android:windowLightStatusBar">true</item>
-              </style>
+              <style name="AppTheme" parent="Theme.Material3.DayNight.NoActionBar" />
           </resources>
           EOF
 
           cat > app/src/main/res/layout/activity_main.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
-
           <LinearLayout
               xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
@@ -148,28 +123,27 @@ jobs:
                   android:layout_height="wrap_content"
                   android:text="FarmersMeet Nigeria"
                   android:textSize="28sp"
-                  android:textStyle="bold"
-                  android:layout_marginBottom="10dp" />
+                  android:textStyle="bold" />
 
               <TextView
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
-                  android:text="Connect • Buy • Sell • Grow"
+                  android:text="Connect - Buy - Sell - Grow"
                   android:textSize="17sp"
-                  android:layout_marginBottom="30dp" />
+                  android:layout_marginTop="10dp" />
 
               <Button
                   android:id="@+id/marketplaceButton"
                   android:layout_width="match_parent"
                   android:layout_height="wrap_content"
-                  android:text="Enter Marketplace" />
+                  android:text="Enter Marketplace"
+                  android:layout_marginTop="30dp" />
 
           </LinearLayout>
           EOF
 
           cat > app/src/main/res/layout/activity_marketplace.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
-
           <ScrollView
               xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
@@ -186,15 +160,15 @@ jobs:
                       android:layout_height="wrap_content"
                       android:text="FarmersMeet Marketplace"
                       android:textSize="26sp"
-                      android:textStyle="bold"
-                      android:layout_marginBottom="8dp" />
+                      android:textStyle="bold" />
 
                   <TextView
                       android:layout_width="wrap_content"
                       android:layout_height="wrap_content"
-                      android:text="What are you looking for?"
+                      android:text="Choose a category"
                       android:textSize="17sp"
-                      android:layout_marginBottom="24dp" />
+                      android:layout_marginTop="8dp"
+                      android:layout_marginBottom="20dp" />
 
                   <Button
                       android:id="@+id/cropsButton"
@@ -234,7 +208,6 @@ jobs:
                       android:layout_marginTop="18dp" />
 
               </LinearLayout>
-
           </ScrollView>
           EOF
 
@@ -247,17 +220,15 @@ jobs:
           import androidx.appcompat.app.AppCompatActivity
 
           class MainActivity : AppCompatActivity() {
-
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
                   setContentView(R.layout.activity_main)
 
-                  findViewById<Button>(R.id.marketplaceButton)
-                      .setOnClickListener {
-                          startActivity(
-                              Intent(this, MarketplaceActivity::class.java)
-                          )
-                      }
+                  findViewById<Button>(R.id.marketplaceButton).setOnClickListener {
+                      startActivity(
+                          Intent(this, MarketplaceActivity::class.java)
+                      )
+                  }
               }
           }
           EOF
@@ -271,7 +242,6 @@ jobs:
           import androidx.appcompat.app.AppCompatActivity
 
           class MarketplaceActivity : AppCompatActivity() {
-
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
                   setContentView(R.layout.activity_marketplace)
@@ -286,6 +256,38 @@ jobs:
                   )
 
                   buttons.forEach { (id, name) ->
+                      findViewById<Button>(id).setOnClickListener {
+                          Toast.makeText(
+                              this,
+                              "$name selected",
+                              Toast.LENGTH_SHORT
+                          ).show()
+                      }
+                  }
+              }
+          }
+          EOF
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10'
+
+      - name: Build APK
+        working-directory: FarmersMeet
+        run: gradle :app:assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FarmersMeet-marketplace-apk
+          path: FarmersMeet/app/build/outputs/apk/debug/app-debug.apk) ->
                       findViewById<Button>(id).setOnClickListener {
                           Toast.makeText(
                               this,
