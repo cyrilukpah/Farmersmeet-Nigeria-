@@ -25,15 +25,17 @@ jobs:
         with:
           gradle-version: '8.10'
 
-      - name: Create FarmersMeet Stage 3
+      - name: Create project folders
         shell: bash
         run: |
           rm -rf FarmersMeet
-
           mkdir -p FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria
           mkdir -p FarmersMeet/app/src/main/res/values
 
-          cat > FarmersMeet/settings.gradle <<'EOF'
+      - name: Create Gradle settings
+        shell: bash
+        run: |
+          cat > FarmersMeet/settings.gradle <<'SETTINGS'
           pluginManagement {
               repositories {
                   google()
@@ -52,21 +54,32 @@ jobs:
 
           rootProject.name = "FarmersMeetNigeria"
           include(":app")
-          EOF
+          SETTINGS
 
-          cat > FarmersMeet/build.gradle <<'EOF'
+      - name: Create root Gradle file
+        shell: bash
+        run: |
+          cat > FarmersMeet/build.gradle <<'BUILD'
           plugins {
               id 'com.android.application' version '8.7.3' apply false
               id 'org.jetbrains.kotlin.android' version '2.0.21' apply false
           }
-          EOF
+          BUILD
 
-          cat > FarmersMeet/gradle.properties <<'EOF'
+      - name: Create Gradle properties
+        shell: bash
+        run: |
+          cat > FarmersMeet/gradle.properties <<'PROPERTIES'
           android.useAndroidX=true
           android.nonTransitiveRClass=true
-          EOF
+          PROPERTIES
 
-          cat > FarmersMeet/app/build.gradle <<'EOF'
+      - name: Create app Gradle file
+        shell: bash
+        run: |
+          mkdir -p FarmersMeet/app
+
+          cat > FarmersMeet/app/build.gradle <<'BUILD'
           plugins {
               id 'com.android.application'
               id 'org.jetbrains.kotlin.android'
@@ -98,9 +111,12 @@ jobs:
               implementation 'androidx.core:core-ktx:1.15.0'
               implementation 'androidx.appcompat:appcompat:1.7.0'
           }
-          EOF
+          BUILD
 
-          cat > FarmersMeet/app/src/main/AndroidManifest.xml <<'EOF'
+      - name: Create Android manifest
+        shell: bash
+        run: |
+          cat > FarmersMeet/app/src/main/AndroidManifest.xml <<'MANIFEST'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
@@ -124,9 +140,12 @@ jobs:
               </application>
 
           </manifest>
-          EOF
+          MANIFEST
 
-          cat > FarmersMeet/app/src/main/res/values/themes.xml <<'EOF'
+      - name: Create theme
+        shell: bash
+        run: |
+          cat > FarmersMeet/app/src/main/res/values/themes.xml <<'THEME'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
@@ -137,6 +156,464 @@ jobs:
                   <item name="android:windowLightStatusBar">false</item>
               </style>
           </resources>
-          EOF
+          THEME
 
-          cat > FarmersMeet
+      - name: Create MainActivity
+        shell: bash
+        run: |
+          cat > FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt <<'KOTLIN'
+          package ng.farmersmeet.nigeria
+
+          import android.app.Activity
+          import android.graphics.Color
+          import android.os.Bundle
+          import android.view.Gravity
+          import android.widget.*
+
+          data class Listing(
+              val name: String,
+              val category: String,
+              val price: String,
+              val quantity: String,
+              val location: String,
+              val seller: String
+          )
+
+          class MainActivity : Activity() {
+
+              private val green = Color.rgb(23, 107, 53)
+              private val darkGreen = Color.rgb(13, 77, 37)
+              private val yellow = Color.rgb(244, 196, 48)
+              private val backgroundColor = Color.rgb(247, 250, 245)
+              private val textColor = Color.rgb(24, 53, 31)
+
+              private val categories = arrayOf(
+                  "Crops and Farm Produce",
+                  "Pigs and Piglets",
+                  "Fish and Aquaculture",
+                  "Other Livestock",
+                  "Poultry",
+                  "Seeds and Seedlings",
+                  "Farm Equipment"
+              )
+
+              private val listings = listOf(
+                  Listing(
+                      "Healthy Large Pig",
+                      "Pigs and Piglets",
+                      "₦250,000",
+                      "1 pig",
+                      "Aba, Abia State",
+                      "John's Pig Farm"
+                  ),
+                  Listing(
+                      "Weaner Piglets",
+                      "Pigs and Piglets",
+                      "₦85,000",
+                      "2 piglets",
+                      "Umuahia, Abia State",
+                      "Green Valley Farm"
+                  ),
+                  Listing(
+                      "Fresh Catfish",
+                      "Fish and Aquaculture",
+                      "₦2,500",
+                      "10 kg",
+                      "Abakaliki, Ebonyi State",
+                      "Ebonyi Fish Farm"
+                  ),
+                  Listing(
+                      "Catfish Fingerlings",
+                      "Fish and Aquaculture",
+                      "₦25,000",
+                      "1,000 fingerlings",
+                      "Umuahia, Abia State",
+                      "AquaGrow Nigeria"
+                  ),
+                  Listing(
+                      "Dried Maize",
+                      "Crops and Farm Produce",
+                      "₦65,000",
+                      "100 kg",
+                      "Abakaliki, Ebonyi State",
+                      "Agro Best Farm"
+                  ),
+                  Listing(
+                      "Fresh Cassava",
+                      "Crops and Farm Produce",
+                      "₦45,000",
+                      "1 tonne",
+                      "Aba, Abia State",
+                      "Eastern Agro Farms"
+                  ),
+                  Listing(
+                      "Broiler Chickens",
+                      "Poultry",
+                      "₦12,000",
+                      "10 birds",
+                      "Umuahia, Abia State",
+                      "Sunrise Poultry"
+                  ),
+                  Listing(
+                      "Healthy Goats",
+                      "Other Livestock",
+                      "₦120,000",
+                      "2 goats",
+                      "Abakaliki, Ebonyi State",
+                      "Ebony Livestock Farm"
+                  ),
+                  Listing(
+                      "Hybrid Maize Seeds",
+                      "Seeds and Seedlings",
+                      "₦18,000",
+                      "5 kg",
+                      "Aba, Abia State",
+                      "Farm Input Centre"
+                  ),
+                  Listing(
+                      "Knapsack Sprayer",
+                      "Farm Equipment",
+                      "₦45,000",
+                      "1 unit",
+                      "Aba, Abia State",
+                      "Agro Tools Nigeria"
+                  )
+              )
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  showHome()
+              }
+
+              private fun layout(): LinearLayout {
+                  return LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      setBackgroundColor(backgroundColor)
+                      setPadding(24, 24, 24, 24)
+                  }
+              }
+
+              private fun heading(value: String): TextView {
+                  return TextView(this).apply {
+                      text = value
+                      textSize = 28f
+                      setTextColor(green)
+                      setTypeface(null, android.graphics.Typeface.BOLD)
+                      setPadding(0, 12, 0, 18)
+                  }
+              }
+
+              private fun makeButton(
+                  value: String,
+                  yellowButton: Boolean = false
+              ): Button {
+                  return Button(this).apply {
+                      text = value
+                      textSize = 15f
+                      setTypeface(null, android.graphics.Typeface.BOLD)
+                      setTextColor(
+                          if (yellowButton) textColor else Color.WHITE
+                      )
+                      setBackgroundColor(
+                          if (yellowButton) yellow else green
+                      )
+                      layoutParams = LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.MATCH_PARENT,
+                          LinearLayout.LayoutParams.WRAP_CONTENT
+                      ).apply {
+                          setMargins(0, 7, 0, 7)
+                      }
+                  }
+              }
+
+              private fun showHome() {
+                  val root = layout()
+                  root.gravity = Gravity.CENTER
+
+                  val logo = heading("FarmersMeet")
+                  logo.textSize = 40f
+                  logo.gravity = Gravity.CENTER
+
+                  val description = TextView(this).apply {
+                      text = "Connecting farmers, buyers and agricultural businesses"
+                      textSize = 16f
+                      setTextColor(textColor)
+                      gravity = Gravity.CENTER
+                      setPadding(10, 0, 10, 25)
+                  }
+
+                  val enter = makeButton("ENTER MARKETPLACE", true)
+
+                  enter.setOnClickListener {
+                      showMarketplace()
+                  }
+
+                  root.addView(logo)
+                  root.addView(description)
+                  root.addView(enter)
+
+                  setContentView(root)
+              }
+
+              private fun showMarketplace() {
+                  val scroll = ScrollView(this)
+                  val root = layout()
+
+                  root.addView(heading("FarmersMeet Marketplace"))
+
+                  val description = TextView(this).apply {
+                      text = "Buy and sell agricultural products"
+                      textSize = 16f
+                      setTextColor(textColor)
+                      setPadding(0, 0, 0, 18)
+                  }
+
+                  root.addView(description)
+
+                  categories.forEach { category ->
+                      val button = makeButton(category)
+
+                      button.setOnClickListener {
+                          showListings(category)
+                      }
+
+                      root.addView(button)
+                  }
+
+                  val sell = makeButton("SELL AN ITEM", true)
+
+                  sell.setOnClickListener {
+                      showSell()
+                  }
+
+                  root.addView(sell)
+
+                  scroll.addView(root)
+                  setContentView(scroll)
+              }
+
+              private fun showListings(category: String) {
+                  val scroll = ScrollView(this)
+                  val root = layout()
+
+                  root.addView(heading(category))
+
+                  val matches = listings.filter {
+                      it.category == category
+                  }
+
+                  if (matches.isEmpty()) {
+                      val message = TextView(this).apply {
+                          text = "No listings available yet."
+                          textSize = 18f
+                          setTextColor(textColor)
+                          setPadding(0, 20, 0, 30)
+                      }
+
+                      root.addView(message)
+                  } else {
+                      matches.forEach { listing ->
+
+                          val name = TextView(this).apply {
+                              text = listing.name
+                              textSize = 21f
+                              setTextColor(green)
+                              setTypeface(null, android.graphics.Typeface.BOLD)
+                              setPadding(0, 10, 0, 5)
+                          }
+
+                          val price = TextView(this).apply {
+                              text = listing.price
+                              textSize = 20f
+                              setTextColor(darkGreen)
+                              setTypeface(null, android.graphics.Typeface.BOLD)
+                          }
+
+                          val details = TextView(this).apply {
+                              text =
+                                  "Quantity: ${listing.quantity}\n" +
+                                  "Location: ${listing.location}\n" +
+                                  "Seller: ${listing.seller}"
+                              textSize = 15f
+                              setTextColor(textColor)
+                              setPadding(0, 5, 0, 5)
+                          }
+
+                          root.addView(name)
+                          root.addView(price)
+                          root.addView(details)
+
+                          val view = makeButton("VIEW DETAILS")
+
+                          view.setOnClickListener {
+                              showDetails(listing)
+                          }
+
+                          root.addView(view)
+                      }
+                  }
+
+                  val sell = makeButton("SELL AN ITEM", true)
+
+                  sell.setOnClickListener {
+                      showSell()
+                  }
+
+                  root.addView(sell)
+
+                  val back = makeButton("BACK TO MARKETPLACE")
+
+                  back.setOnClickListener {
+                      showMarketplace()
+                  }
+
+                  root.addView(back)
+
+                  scroll.addView(root)
+                  setContentView(scroll)
+              }
+
+              private fun showDetails(listing: Listing) {
+                  val scroll = ScrollView(this)
+                  val root = layout()
+
+                  root.addView(heading(listing.name))
+
+                  val details = TextView(this).apply {
+                      text =
+                          "PRICE\n${listing.price}\n\n" +
+                          "CATEGORY\n${listing.category}\n\n" +
+                          "QUANTITY\n${listing.quantity}\n\n" +
+                          "LOCATION\n${listing.location}\n\n" +
+                          "SELLER\n${listing.seller}"
+
+                      textSize = 17f
+                      setTextColor(textColor)
+                      setPadding(0, 5, 0, 20)
+                  }
+
+                  root.addView(details)
+
+                  val back = makeButton("BACK TO LISTINGS")
+
+                  back.setOnClickListener {
+                      showListings(listing.category)
+                  }
+
+                  root.addView(back)
+
+                  val market = makeButton("MARKETPLACE", true)
+
+                  market.setOnClickListener {
+                      showMarketplace()
+                  }
+
+                  root.addView(market)
+
+                  scroll.addView(root)
+                  setContentView(scroll)
+              }
+
+              private fun showSell() {
+                  val scroll = ScrollView(this)
+                  val root = layout()
+
+                  root.addView(heading("Sell an Item"))
+
+                  val category = Spinner(this)
+
+                  category.adapter = ArrayAdapter(
+                      this,
+                      android.R.layout.simple_spinner_dropdown_item,
+                      categories
+                  )
+
+                  root.addView(category)
+
+                  val name = field("Product name")
+                  val price = field("Price in Naira")
+                  val quantity = field("Quantity")
+                  val location = field("Location")
+                  val seller = field("Seller name")
+
+                  root.addView(name)
+                  root.addView(price)
+                  root.addView(quantity)
+                  root.addView(location)
+                  root.addView(seller)
+
+                  val post = makeButton("POST LISTING", true)
+
+                  post.setOnClickListener {
+                      if (
+                          name.text.toString().trim().isEmpty() ||
+                          price.text.toString().trim().isEmpty() ||
+                          quantity.text.toString().trim().isEmpty() ||
+                          location.text.toString().trim().isEmpty() ||
+                          seller.text.toString().trim().isEmpty()
+                      ) {
+                          Toast.makeText(
+                              this,
+                              "Please complete all fields.",
+                              Toast.LENGTH_SHORT
+                          ).show()
+                      } else {
+                          Toast.makeText(
+                              this,
+                              "Listing posted successfully!",
+                              Toast.LENGTH_LONG
+                          ).show()
+                      }
+                  }
+
+                  root.addView(post)
+
+                  val back = makeButton("BACK TO MARKETPLACE")
+
+                  back.setOnClickListener {
+                      showMarketplace()
+                  }
+
+                  root.addView(back)
+
+                  scroll.addView(root)
+                  setContentView(scroll)
+              }
+
+              private fun field(hintValue: String): EditText {
+                  return EditText(this).apply {
+                      hint = hintValue
+                      textSize = 16f
+                      setTextColor(textColor)
+
+                      layoutParams = LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.MATCH_PARENT,
+                          LinearLayout.LayoutParams.WRAP_CONTENT
+                      ).apply {
+                          setMargins(0, 5, 0, 5)
+                      }
+                  }
+              }
+          }
+          KOTLIN
+
+      - name: Verify project files
+        shell: bash
+        run: |
+          test -f FarmersMeet/settings.gradle
+          test -f FarmersMeet/build.gradle
+          test -f FarmersMeet/app/build.gradle
+          test -f FarmersMeet/app/src/main/AndroidManifest.xml
+          test -f FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt
+          echo "FarmersMeet project files verified."
+
+      - name: Build APK
+        working-directory: FarmersMeet
+        run: gradle :app:assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FarmersMeet-Stage3-APK
+          path: FarmersMeet/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
