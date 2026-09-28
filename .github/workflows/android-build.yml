@@ -1,4 +1,4 @@
-name: FarmersMeet Stage 2 APK
+name: FarmersMeet Stage 3 APK
 
 on:
   workflow_dispatch:
@@ -25,7 +25,7 @@ jobs:
         with:
           gradle-version: '8.10'
 
-      - name: Create FarmersMeet app
+      - name: Create FarmersMeet Stage 3
         shell: bash
         run: |
           rm -rf FarmersMeet
@@ -80,8 +80,8 @@ jobs:
                   applicationId 'ng.farmersmeet.nigeria'
                   minSdk 24
                   targetSdk 35
-                  versionCode 3
-                  versionName "3.0"
+                  versionCode 4
+                  versionName "4.0"
               }
 
               compileOptions {
@@ -139,179 +139,7 @@ jobs:
           </resources>
           EOF
 
-          cat > FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt <<'EOF'
-          package ng.farmersmeet.nigeria
-
-          import android.app.Activity
-          import android.graphics.Color
-          import android.os.Bundle
-          import android.view.Gravity
-          import android.widget.*
-
-          class MainActivity : Activity() {
-
-              private val green = Color.rgb(23, 107, 53)
-              private val darkGreen = Color.rgb(13, 77, 37)
-              private val yellow = Color.rgb(244, 196, 48)
-              private val backgroundColorValue = Color.rgb(247, 250, 245)
-              private val textColor = Color.rgb(24, 53, 31)
-
-              private val categories = arrayOf(
-                  "Crops and Farm Produce",
-                  "Pigs and Piglets",
-                  "Fish and Aquaculture",
-                  "Other Livestock",
-                  "Poultry",
-                  "Seeds and Seedlings",
-                  "Farm Equipment"
-              )
-
-              override fun onCreate(savedInstanceState: Bundle?) {
-                  super.onCreate(savedInstanceState)
-                  showHome()
-              }
-
-              private fun layout(): LinearLayout {
-                  return LinearLayout(this).apply {
-                      orientation = LinearLayout.VERTICAL
-                      setBackgroundColor(backgroundColorValue)
-                      setPadding(24, 24, 24, 24)
-                  }
-              }
-
-              private fun heading(value: String): TextView {
-                  return TextView(this).apply {
-                      text = value
-                      textSize = 28f
-                      setTextColor(green)
-                      setTypeface(null, android.graphics.Typeface.BOLD)
-                      setPadding(0, 12, 0, 18)
-                  }
-              }
-
-              private fun button(
-                  value: String,
-                  yellowButton: Boolean = false
-              ): Button {
-                  return Button(this).apply {
-                      text = value
-                      textSize = 15f
-                      setTypeface(null, android.graphics.Typeface.BOLD)
-                      setTextColor(
-                          if (yellowButton) textColor else Color.WHITE
-                      )
-                      setBackgroundColor(
-                          if (yellowButton) yellow else green
-                      )
-
-                      layoutParams = LinearLayout.LayoutParams(
-                          LinearLayout.LayoutParams.MATCH_PARENT,
-                          LinearLayout.LayoutParams.WRAP_CONTENT
-                      ).apply {
-                          setMargins(0, 7, 0, 7)
-                      }
-                  }
-              }
-
-              private fun showHome() {
-                  val root = layout()
-                  root.gravity = Gravity.CENTER
-
-                  val logo = heading("FarmersMeet")
-                  logo.textSize = 40f
-                  logo.gravity = Gravity.CENTER
-
-                  val description = TextView(this).apply {
-                      text = "Connecting farmers, buyers and agricultural businesses"
-                      textSize = 16f
-                      setTextColor(textColor)
-                      gravity = Gravity.CENTER
-                      setPadding(10, 0, 10, 25)
-                  }
-
-                  val enter = button("ENTER MARKETPLACE", true)
-
-                  enter.setOnClickListener {
-                      showMarketplace()
-                  }
-
-                  root.addView(logo)
-                  root.addView(description)
-                  root.addView(enter)
-
-                  setContentView(root)
-              }
-
-              private fun showMarketplace() {
-                  val scroll = ScrollView(this)
-                  val root = layout()
-
-                  root.addView(heading("FarmersMeet Marketplace"))
-
-                  val description = TextView(this).apply {
-                      text = "Buy and sell agricultural products"
-                      textSize = 16f
-                      setTextColor(textColor)
-                      setPadding(0, 0, 0, 18)
-                  }
-
-                  root.addView(description)
-
-                  categories.forEach { category ->
-                      val categoryButton = button(category)
-
-                      categoryButton.setOnClickListener {
-                          showListings(category)
-                      }
-
-                      root.addView(categoryButton)
-                  }
-
-                  val sell = button("SELL AN ITEM", true)
-
-                  sell.setOnClickListener {
-                      showSell()
-                  }
-
-                  root.addView(sell)
-
-                  scroll.addView(root)
-                  setContentView(scroll)
-              }
-
-              private fun showListings(category: String) {
-                  val scroll = ScrollView(this)
-                  val root = layout()
-
-                  root.addView(heading(category))
-
-                  val message = TextView(this).apply {
-                      text = "Listings for $category will appear here."
-                      textSize = 18f
-                      setTextColor(textColor)
-                      setPadding(0, 20, 0, 30)
-                  }
-
-                  root.addView(message)
-
-                  val sell = button("SELL IN THIS CATEGORY", true)
-
-                  sell.setOnClickListener {
-                      showSell()
-                  }
-
-                  root.addView(sell)
-
-                  val back = button("BACK TO MARKETPLACE")
-
-                  back.setOnClickListener {
-                      showMarketplace()
-                  }
-
-                  root.addView(back)
-
-                  scroll.addView(root)
-                  setContentView(scroll)
+          cat > FarmersMeet
               }
 
               private fun showSell() {
