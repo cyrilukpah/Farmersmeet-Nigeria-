@@ -132,16 +132,9 @@ jobs:
           </resources>
           EOF
 
-          cat > app/src/main/res/values/colors.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="green_primary">#2E7D32</color>
-              <color name="green_dark">#1B5E20</color>
-          </resources>
-          EOF
-
           cat > app/src/main/res/layout/activity_main.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
+
           <LinearLayout
               xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
@@ -207,37 +200,37 @@ jobs:
                       android:id="@+id/cropsButton"
                       android:layout_width="match_parent"
                       android:layout_height="wrap_content"
-                      android:text="🌾 Crops & Farm Produce" />
+                      android:text="Crops and Farm Produce" />
 
                   <Button
                       android:id="@+id/livestockButton"
                       android:layout_width="match_parent"
                       android:layout_height="wrap_content"
-                      android:text="🐖 Livestock" />
+                      android:text="Livestock" />
 
                   <Button
                       android:id="@+id/poultryButton"
                       android:layout_width="match_parent"
                       android:layout_height="wrap_content"
-                      android:text="🐔 Poultry" />
+                      android:text="Poultry" />
 
                   <Button
                       android:id="@+id/seedsButton"
                       android:layout_width="match_parent"
                       android:layout_height="wrap_content"
-                      android:text="🌱 Seeds & Seedlings" />
+                      android:text="Seeds and Seedlings" />
 
                   <Button
                       android:id="@+id/equipmentButton"
                       android:layout_width="match_parent"
                       android:layout_height="wrap_content"
-                      android:text="🚜 Farm Equipment" />
+                      android:text="Farm Equipment" />
 
                   <Button
                       android:id="@+id/sellButton"
                       android:layout_width="match_parent"
                       android:layout_height="wrap_content"
-                      android:text="➕ Sell an Item"
+                      android:text="Sell an Item"
                       android:layout_marginTop="18dp" />
 
               </LinearLayout>
@@ -284,9 +277,47 @@ jobs:
                   setContentView(R.layout.activity_marketplace)
 
                   val buttons = listOf(
-                      R.id.cropsButton to "Crops & Farm Produce",
+                      R.id.cropsButton to "Crops and Farm Produce",
                       R.id.livestockButton to "Livestock",
                       R.id.poultryButton to "Poultry",
+                      R.id.seedsButton to "Seeds and Seedlings",
+                      R.id.equipmentButton to "Farm Equipment",
+                      R.id.sellButton to "Sell an Item"
+                  )
+
+                  buttons.forEach { (id, name) ->
+                      findViewById<Button>(id).setOnClickListener {
+                          Toast.makeText(
+                              this,
+                              "$name selected",
+                              Toast.LENGTH_SHORT
+                          ).show()
+                      }
+                  }
+              }
+          }
+          EOF
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10'
+
+      - name: Build APK
+        working-directory: FarmersMeet
+        run: gradle :app:assembleDebug
+
+      - name: Upload FarmersMeet APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FarmersMeet-marketplace-apk
+          path: FarmersMeet/app/build/outputs/apk/debug/app-debug.apk       R.id.poultryButton to "Poultry",
                       R.id.seedsButton to "Seeds & Seedlings",
                       R.id.equipmentButton to "Farm Equipment",
                       R.id.sellButton to "Sell an Item"
