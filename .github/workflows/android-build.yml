@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Create fresh FarmersMeet project
+      - name: Create FarmersMeet project
         shell: bash
         run: |
           set -e
@@ -70,8 +70,8 @@ jobs:
                   applicationId 'ng.farmersmeet.nigeria'
                   minSdk 24
                   targetSdk 35
-                  versionCode 1
-                  versionName '1.0'
+                  versionCode 2
+                  versionName '2.0'
               }
 
               compileOptions {
@@ -103,6 +103,10 @@ jobs:
                   android:theme="@style/AppTheme">
 
                   <activity
+                      android:name=".MarketplaceActivity"
+                      android:exported="false" />
+
+                  <activity
                       android:name=".MainActivity"
                       android:exported="true">
 
@@ -128,6 +132,14 @@ jobs:
           </resources>
           EOF
 
+          cat > app/src/main/res/values/colors.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="green_primary">#2E7D32</color>
+              <color name="green_dark">#1B5E20</color>
+          </resources>
+          EOF
+
           cat > app/src/main/res/layout/activity_main.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout
@@ -136,7 +148,7 @@ jobs:
               android:layout_height="match_parent"
               android:orientation="vertical"
               android:gravity="center"
-              android:padding="32dp">
+              android:padding="28dp">
 
               <TextView
                   android:layout_width="wrap_content"
@@ -144,14 +156,14 @@ jobs:
                   android:text="FarmersMeet Nigeria"
                   android:textSize="28sp"
                   android:textStyle="bold"
-                  android:layout_marginBottom="12dp" />
+                  android:layout_marginBottom="10dp" />
 
               <TextView
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
                   android:text="Connect • Buy • Sell • Grow"
-                  android:textSize="18sp"
-                  android:layout_marginBottom="32dp" />
+                  android:textSize="17sp"
+                  android:layout_marginBottom="30dp" />
 
               <Button
                   android:id="@+id/marketplaceButton"
@@ -162,10 +174,83 @@ jobs:
           </LinearLayout>
           EOF
 
+          cat > app/src/main/res/layout/activity_marketplace.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+
+          <ScrollView
+              xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent">
+
+              <LinearLayout
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:orientation="vertical"
+                  android:padding="24dp">
+
+                  <TextView
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:text="FarmersMeet Marketplace"
+                      android:textSize="26sp"
+                      android:textStyle="bold"
+                      android:layout_marginBottom="8dp" />
+
+                  <TextView
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:text="What are you looking for?"
+                      android:textSize="17sp"
+                      android:layout_marginBottom="24dp" />
+
+                  <Button
+                      android:id="@+id/cropsButton"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:text="🌾 Crops & Farm Produce" />
+
+                  <Button
+                      android:id="@+id/livestockButton"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:text="🐖 Livestock" />
+
+                  <Button
+                      android:id="@+id/poultryButton"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:text="🐔 Poultry" />
+
+                  <Button
+                      android:id="@+id/seedsButton"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:text="🌱 Seeds & Seedlings" />
+
+                  <Button
+                      android:id="@+id/equipmentButton"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:text="🚜 Farm Equipment" />
+
+                  <Button
+                      android:id="@+id/sellButton"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:text="➕ Sell an Item"
+                      android:layout_marginTop="18dp" />
+
+              </LinearLayout>
+
+          </ScrollView>
+          EOF
+
           cat > app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt <<'EOF'
           package ng.farmersmeet.nigeria
 
+          import android.content.Intent
           import android.os.Bundle
+          import android.widget.Button
           import androidx.appcompat.app.AppCompatActivity
 
           class MainActivity : AppCompatActivity() {
@@ -173,6 +258,49 @@ jobs:
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
                   setContentView(R.layout.activity_main)
+
+                  findViewById<Button>(R.id.marketplaceButton)
+                      .setOnClickListener {
+                          startActivity(
+                              Intent(this, MarketplaceActivity::class.java)
+                          )
+                      }
+              }
+          }
+          EOF
+
+          cat > app/src/main/java/ng/farmersmeet/nigeria/MarketplaceActivity.kt <<'EOF'
+          package ng.farmersmeet.nigeria
+
+          import android.os.Bundle
+          import android.widget.Button
+          import android.widget.Toast
+          import androidx.appcompat.app.AppCompatActivity
+
+          class MarketplaceActivity : AppCompatActivity() {
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  setContentView(R.layout.activity_marketplace)
+
+                  val buttons = listOf(
+                      R.id.cropsButton to "Crops & Farm Produce",
+                      R.id.livestockButton to "Livestock",
+                      R.id.poultryButton to "Poultry",
+                      R.id.seedsButton to "Seeds & Seedlings",
+                      R.id.equipmentButton to "Farm Equipment",
+                      R.id.sellButton to "Sell an Item"
+                  )
+
+                  buttons.forEach { (id, name) ->
+                      findViewById<Button>(id).setOnClickListener {
+                          Toast.makeText(
+                              this,
+                              "$name selected",
+                              Toast.LENGTH_SHORT
+                          ).show()
+                      }
+                  }
               }
           }
           EOF
@@ -195,5 +323,5 @@ jobs:
       - name: Upload FarmersMeet APK
         uses: actions/upload-artifact@v4
         with:
-          name: FarmersMeet-debug-apk
+          name: FarmersMeet-marketplace-apk
           path: FarmersMeet/app/build/outputs/apk/debug/app-debug.apk
