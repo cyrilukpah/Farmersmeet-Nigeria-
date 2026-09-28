@@ -25,12 +25,13 @@ jobs:
         with:
           gradle-version: '8.10'
 
-      - name: Create complete FarmersMeet app
+      - name: Create FarmersMeet app
         shell: bash
         run: |
           rm -rf FarmersMeet
 
           mkdir -p FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria
+          mkdir -p FarmersMeet/app/src/main/res/values
 
           cat > FarmersMeet/settings.gradle <<'EOF'
           pluginManagement {
@@ -125,8 +126,6 @@ jobs:
           </manifest>
           EOF
 
-          mkdir -p FarmersMeet/app/src/main/res/values
-
           cat > FarmersMeet/app/src/main/res/values/themes.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -148,29 +147,15 @@ jobs:
           import android.graphics.Color
           import android.os.Bundle
           import android.view.Gravity
-          import android.view.View
           import android.widget.*
-          import org.json.JSONArray
-          import org.json.JSONObject
-
-          data class Listing(
-              val name: String,
-              val category: String,
-              val price: String,
-              val quantity: String,
-              val location: String,
-              val seller: String,
-              val description: String
-          )
 
           class MainActivity : Activity() {
 
               private val green = Color.rgb(23, 107, 53)
               private val darkGreen = Color.rgb(13, 77, 37)
               private val yellow = Color.rgb(244, 196, 48)
-              private val cream = Color.rgb(247, 250, 245)
-              private val white = Color.WHITE
-              private val text = Color.rgb(24, 53, 31)
+              private val background = Color.rgb(247, 250, 245)
+              private val textColor = Color.rgb(24, 53, 31)
 
               private val categories = arrayOf(
                   "Crops and Farm Produce",
@@ -187,35 +172,38 @@ jobs:
                   showHome()
               }
 
-              private fun base(): LinearLayout {
+              private fun layout(): LinearLayout {
                   return LinearLayout(this).apply {
                       orientation = LinearLayout.VERTICAL
-                      setBackgroundColor(cream)
-                      setPadding(20, 20, 20, 20)
+                      setBackgroundColor(background)
+                      setPadding(24, 24, 24, 24)
                   }
               }
 
-              private fun title(textValue: String): TextView {
+              private fun heading(value: String): TextView {
                   return TextView(this).apply {
-                      text = textValue
+                      text = value
                       textSize = 28f
                       setTextColor(green)
                       setTypeface(null, android.graphics.Typeface.BOLD)
-                      setPadding(0, 10, 0, 18)
+                      setPadding(0, 12, 0, 18)
                   }
               }
 
               private fun button(
-                  label: String,
+                  value: String,
                   yellowButton: Boolean = false
               ): Button {
                   return Button(this).apply {
-                      text = label
+                      text = value
                       textSize = 15f
                       setTypeface(null, android.graphics.Typeface.BOLD)
-                      setTextColor(if (yellowButton) text else white)
-                      setBackgroundColor(if (yellowButton) yellow else green)
-                      isAllCaps = false
+                      setTextColor(
+                          if (yellowButton) textColor else Color.WHITE
+                      )
+                      setBackgroundColor(
+                          if (yellowButton) yellow else green
+                      )
 
                       layoutParams = LinearLayout.LayoutParams(
                           LinearLayout.LayoutParams.MATCH_PARENT,
@@ -227,17 +215,17 @@ jobs:
               }
 
               private fun showHome() {
-                  val root = base()
+                  val root = layout()
                   root.gravity = Gravity.CENTER
 
-                  val logo = title("FarmersMeet")
+                  val logo = heading("FarmersMeet")
                   logo.textSize = 40f
                   logo.gravity = Gravity.CENTER
 
-                  val subtitle = TextView(this).apply {
+                  val description = TextView(this).apply {
                       text = "Connecting farmers, buyers and agricultural businesses"
                       textSize = 16f
-                      setTextColor(text)
+                      setTextColor(textColor)
                       gravity = Gravity.CENTER
                       setPadding(10, 0, 10, 25)
                   }
@@ -249,7 +237,7 @@ jobs:
                   }
 
                   root.addView(logo)
-                  root.addView(subtitle)
+                  root.addView(description)
                   root.addView(enter)
 
                   setContentView(root)
@@ -257,26 +245,27 @@ jobs:
 
               private fun showMarketplace() {
                   val scroll = ScrollView(this)
-                  val root = base()
+                  val root = layout()
 
-                  val heading = title("FarmersMeet Marketplace")
+                  root.addView(heading("FarmersMeet Marketplace"))
 
-                  val intro = TextView(this).apply {
+                  val description = TextView(this).apply {
                       text = "Buy and sell agricultural products"
                       textSize = 16f
-                      setTextColor(text)
-                      setPadding(0, 0, 0, 15)
+                      setTextColor(textColor)
+                      setPadding(0, 0, 0, 18)
                   }
 
-                  root.addView(heading)
-                  root.addView(intro)
+                  root.addView(description)
 
-                  for (category in categories) {
-                      val b = button(category)
-                      b.setOnClickListener {
+                  categories.forEach { category ->
+                      val categoryButton = button(category)
+
+                      categoryButton.setOnClickListener {
                           showListings(category)
                       }
-                      root.addView(b)
+
+                      root.addView(categoryButton)
                   }
 
                   val sell = button("SELL AN ITEM", true)
@@ -291,29 +280,56 @@ jobs:
                   setContentView(scroll)
               }
 
-              private fun showSell() {
+              private fun showListings(category: String) {
                   val scroll = ScrollView(this)
-                  val root = base()
+                  val root = layout()
 
-                  root.addView(title("Sell an Item"))
+                  root.addView(heading(category))
 
-                  val info = TextView(this).apply {
-                      text = "Create a marketplace listing"
-                      textSize = 16f
-                      setTextColor(text)
+                  val message = TextView(this).apply {
+                      text = "Listings for $category will appear here."
+                      textSize = 18f
+                      setTextColor(textColor)
+                      setPadding(0, 20, 0, 30)
                   }
 
-                  root.addView(info)
+                  root.addView(message)
 
-                  val categorySpinner = Spinner(this)
+                  val sell = button("SELL IN THIS CATEGORY", true)
 
-                  categorySpinner.adapter = ArrayAdapter(
+                  sell.setOnClickListener {
+                      showSell()
+                  }
+
+                  root.addView(sell)
+
+                  val back = button("BACK TO MARKETPLACE")
+
+                  back.setOnClickListener {
+                      showMarketplace()
+                  }
+
+                  root.addView(back)
+
+                  scroll.addView(root)
+                  setContentView(scroll)
+              }
+
+              private fun showSell() {
+                  val scroll = ScrollView(this)
+                  val root = layout()
+
+                  root.addView(heading("Sell an Item"))
+
+                  val category = Spinner(this)
+
+                  category.adapter = ArrayAdapter(
                       this,
                       android.R.layout.simple_spinner_dropdown_item,
                       categories
                   )
 
-                  root.addView(categorySpinner)
+                  root.addView(category)
 
                   val name = field("Product name")
                   val price = field("Price in Naira")
@@ -321,9 +337,6 @@ jobs:
                   val location = field("Location")
                   val seller = field("Seller name")
                   val description = field("Description")
-
-                  description.minLines = 4
-                  description.gravity = Gravity.TOP
 
                   root.addView(name)
                   root.addView(price)
@@ -335,46 +348,17 @@ jobs:
                   val post = button("POST LISTING", true)
 
                   post.setOnClickListener {
-
-                      if (
-                          name.text.toString().trim().isEmpty() ||
-                          price.text.toString().trim().isEmpty() ||
-                          quantity.text.toString().trim().isEmpty() ||
-                          location.text.toString().trim().isEmpty() ||
-                          seller.text.toString().trim().isEmpty()
-                      ) {
-                          Toast.makeText(
-                              this,
-                              "Please complete the required fields.",
-                              Toast.LENGTH_SHORT
-                          ).show()
-                          return@setOnClickListener
-                      }
-
-                      saveListing(
-                          Listing(
-                              name.text.toString().trim(),
-                              categorySpinner.selectedItem.toString(),
-                              "₦" + price.text.toString().trim(),
-                              quantity.text.toString().trim(),
-                              location.text.toString().trim(),
-                              seller.text.toString().trim(),
-                              description.text.toString().trim()
-                          )
-                      )
-
                       Toast.makeText(
                           this,
                           "Listing posted successfully!",
                           Toast.LENGTH_LONG
                       ).show()
-
-                      showListings(categorySpinner.selectedItem.toString())
                   }
 
                   root.addView(post)
 
                   val back = button("BACK TO MARKETPLACE")
+
                   back.setOnClickListener {
                       showMarketplace()
                   }
@@ -385,13 +369,11 @@ jobs:
                   setContentView(scroll)
               }
 
-              private fun field(hintText: String): EditText {
+              private fun field(hint: String): EditText {
                   return EditText(this).apply {
-                      hint = hintText
+                      this.hint = hint
                       textSize = 16f
-                      setTextColor(text)
-                      setHintTextColor(Color.GRAY)
-
+                      setTextColor(textColor)
                       layoutParams = LinearLayout.LayoutParams(
                           LinearLayout.LayoutParams.MATCH_PARENT,
                           LinearLayout.LayoutParams.WRAP_CONTENT
@@ -400,452 +382,16 @@ jobs:
                       }
                   }
               }
-
-              private fun showListings(category: String) {
-                  val scroll = ScrollView(this)
-                  val root = base()
-
-                  root.addView(title(category))
-
-                  val listings = getListings().filter {
-                      it.category == category
-                  }.reversed()
-
-                  if (listings.isEmpty()) {
-                      val empty = TextView(this).apply {
-                          text = "No listings yet in this category."
-                          textSize = 17f
-                          setTextColor(text)
-                          setPadding(0, 20, 0, 20)
-                      }
-
-                      root.addView(empty)
-                  } else {
-                      listings.forEach { listing ->
-
-                          val card = LinearLayout(this).apply {
-                              orientation = LinearLayout.VERTICAL
-                              setBackgroundColor(white)
-                              setPadding(18, 18, 18, 18)
-
-                              layoutParams = LinearLayout.LayoutParams(
-                                  LinearLayout.LayoutParams.MATCH_PARENT,
-                                  LinearLayout.LayoutParams.WRAP_CONTENT
-                              ).apply {
-                                  setMargins(0, 0, 0, 16)
-                              }
-                          }
-
-                          val name = TextView(this).apply {
-                              text = listing.name
-                              textSize = 21f
-                              setTextColor(green)
-                              setTypeface(null, android.graphics.Typeface.BOLD)
-                          }
-
-                          val price = TextView(this).apply {
-                              text = listing.price
-                              textSize = 20f
-                              setTextColor(darkGreen)
-                              setTypeface(null, android.graphics.Typeface.BOLD)
-                          }
-
-                          val details = TextView(this).apply {
-                              text =
-                                  "Quantity: ${listing.quantity}\n" +
-                                  "Location: ${listing.location}\n" +
-                                  "Seller: ${listing.seller}"
-                              textSize = 15f
-                              setTextColor(text)
-                              setPadding(0, 8, 0, 8)
-                          }
-
-                          val view = button("VIEW DETAILS")
-
-                          view.setOnClickListener {
-                              showDetails(listing)
-                          }
-
-                          card.addView(name)
-                          card.addView(price)
-                          card.addView(details)
-                          card.addView(view)
-
-                          root.addView(card)
-                      }
-                  }
-
-                  val back = button("BACK TO MARKETPLACE")
-                  back.setOnClickListener {
-                      showMarketplace()
-                  }
-
-                  root.addView(back)
-
-                  scroll.addView(root)
-                  setContentView(scroll)
-              }
-
-              private fun showDetails(listing: Listing) {
-                  val root = base()
-
-                  root.addView(title(listing.name))
-
-                  val details = TextView(this).apply {
-                      text =
-                          "PRICE\n${listing.price}\n\n" +
-                          "CATEGORY\n${listing.category}\n\n" +
-                          "QUANTITY\n${listing.quantity}\n\n" +
-                          "LOCATION\n${listing.location}\n\n" +
-                          "SELLER\n${listing.seller}\n\n" +
-                          "DESCRIPTION\n${listing.description.ifEmpty { "No description provided." }}"
-                      textSize = 17f
-                      setTextColor(text)
-                      setPadding(0, 5, 0, 20)
-                  }
-
-                  root.addView(details)
-
-                  val back = button("BACK TO LISTINGS")
-                  back.setOnClickListener {
-                      showListings(listing.category)
-                  }
-
-                  root.addView(back)
-
-                  val market = button("MARKETPLACE", true)
-                  market.setOnClickListener {
-                      showMarketplace()
-                  }
-
-                  root.addView(market)
-
-                  setContentView(root)
-              }
-
-              private fun saveListing(listing: Listing) {
-                  val prefs = getSharedPreferences(
-                      "farmersmeet",
-                      Context.MODE_PRIVATE
-                  )
-
-                  val array = JSONArray(
-                      prefs.getString("listings", "[]") ?: "[]"
-                  )
-
-                  val item = JSONObject()
-
-                  item.put("name", listing.name)
-                  item.put("category", listing.category)
-                  item.put("price", listing.price)
-                  item.put("quantity", listing.quantity)
-                  item.put("location", listing.location)
-                  item.put("seller", listing.seller)
-                  item.put("description", listing.description)
-
-                  array.put(item)
-
-                  prefs.edit()
-                      .putString("listings", array.toString())
-                      .apply()
-              }
-
-              private fun getListings(): List<Listing> {
-                  val prefs = getSharedPreferences(
-                      "farmersmeet",
-                      Context.MODE_PRIVATE
-                  )
-
-                  val array = JSONArray(
-                      prefs.getString("listings", "[]") ?: "[]"
-                  )
-
-                  val result = mutableListOf<Listing>()
-
-                  for (i in 0 until array.length()) {
-                      val item = array.getJSONObject(i)
-
-                      result.add(
-                          Listing(
-                              item.optString("name"),
-                              item.optString("category"),
-                              item.optString("price"),
-                              item.optString("quantity"),
-                              item.optString("location"),
-                              item.optString("seller"),
-                              item.optString("description")
-                          )
-                      )
-                  }
-
-                  return result
-                       categories
-                  )
-
-                  root.addView(categorySpinner)
-
-                  val name = field("Product name")
-                  val price = field("Price in Naira")
-                  val quantity = field("Quantity")
-                  val location = field("Location")
-                  val seller = field("Seller name")
-                  val description = field("Description")
-
-                  description.minLines = 4
-                  description.gravity = Gravity.TOP
-
-                  root.addView(name)
-                  root.addView(price)
-                  root.addView(quantity)
-                  root.addView(location)
-                  root.addView(seller)
-                  root.addView(description)
-
-                  val post = button("POST LISTING", true)
-
-                  post.setOnClickListener {
-
-                      if (
-                          name.text.toString().trim().isEmpty() ||
-                          price.text.toString().trim().isEmpty() ||
-                          quantity.text.toString().trim().isEmpty() ||
-                          location.text.toString().trim().isEmpty() ||
-                          seller.text.toString().trim().isEmpty()
-                      ) {
-                          Toast.makeText(
-                              this,
-                              "Please complete the required fields.",
-                              Toast.LENGTH_SHORT
-                          ).show()
-                          return@setOnClickListener
-                      }
-
-                      saveListing(
-                          Listing(
-                              name.text.toString().trim(),
-                              categorySpinner.selectedItem.toString(),
-                              "₦" + price.text.toString().trim(),
-                              quantity.text.toString().trim(),
-                              location.text.toString().trim(),
-                              seller.text.toString().trim(),
-                              description.text.toString().trim()
-                          )
-                      )
-
-                      Toast.makeText(
-                          this,
-                          "Listing posted successfully!",
-                          Toast.LENGTH_LONG
-                      ).show()
-
-                      showListings(categorySpinner.selectedItem.toString())
-                  }
-
-                  root.addView(post)
-
-                  val back = button("BACK TO MARKETPLACE")
-                  back.setOnClickListener {
-                      showMarketplace()
-                  }
-
-                  root.addView(back)
-
-                  scroll.addView(root)
-                  setContentView(scroll)
-              }
-
-              private fun field(hintText: String): EditText {
-                  return EditText(this).apply {
-                      hint = hintText
-                      textSize = 16f
-                      setTextColor(text)
-                      setHintTextColor(Color.GRAY)
-
-                      layoutParams = LinearLayout.LayoutParams(
-                          LinearLayout.LayoutParams.MATCH_PARENT,
-                          LinearLayout.LayoutParams.WRAP_CONTENT
-                      ).apply {
-                          setMargins(0, 5, 0, 5)
-                      }
-                  }
-              }
-
-              private fun showListings(category: String) {
-                  val scroll = ScrollView(this)
-                  val root = base()
-
-                  root.addView(title(category))
-
-                  val listings = getListings().filter {
-                      it.category == category
-                  }.reversed()
-
-                  if (listings.isEmpty()) {
-                      val empty = TextView(this).apply {
-                          text = "No listings yet in this category."
-                          textSize = 17f
-                          setTextColor(text)
-                          setPadding(0, 20, 0, 20)
-                      }
-
-                      root.addView(empty)
-                  } else {
-                      listings.forEach { listing ->
-
-                          val card = LinearLayout(this).apply {
-                              orientation = LinearLayout.VERTICAL
-                              setBackgroundColor(white)
-                              setPadding(18, 18, 18, 18)
-
-                              layoutParams = LinearLayout.LayoutParams(
-                                  LinearLayout.LayoutParams.MATCH_PARENT,
-                                  LinearLayout.LayoutParams.WRAP_CONTENT
-                              ).apply {
-                                  setMargins(0, 0, 0, 16)
-                              }
-                          }
-
-                          val name = TextView(this).apply {
-                              text = listing.name
-                              textSize = 21f
-                              setTextColor(green)
-                              setTypeface(null, android.graphics.Typeface.BOLD)
-                          }
-
-                          val price = TextView(this).apply {
-                              text = listing.price
-                              textSize = 20f
-                              setTextColor(darkGreen)
-                              setTypeface(null, android.graphics.Typeface.BOLD)
-                          }
-
-                          val details = TextView(this).apply {
-                              text =
-                                  "Quantity: ${listing.quantity}\n" +
-                                  "Location: ${listing.location}\n" +
-                                  "Seller: ${listing.seller}"
-                              textSize = 15f
-                              setTextColor(text)
-                              setPadding(0, 8, 0, 8)
-                          }
-
-                          val view = button("VIEW DETAILS")
-
-                          view.setOnClickListener {
-                              showDetails(listing)
-                          }
-
-                          card.addView(name)
-                          card.addView(price)
-                          card.addView(details)
-                          card.addView(view)
-
-                          root.addView(card)
-                      }
-                  }
-
-                  val back = button("BACK TO MARKETPLACE")
-                  back.setOnClickListener {
-                      showMarketplace()
-                  }
-
-                  root.addView(back)
-
-                  scroll.addView(root)
-                  setContentView(scroll)
-              }
-
-              private fun showDetails(listing: Listing) {
-                  val root = base()
-
-                  root.addView(title(listing.name))
-
-                  val details = TextView(this).apply {
-                      text =
-                          "PRICE\n${listing.price}\n\n" +
-                          "CATEGORY\n${listing.category}\n\n" +
-                          "QUANTITY\n${listing.quantity}\n\n" +
-                          "LOCATION\n${listing.location}\n\n" +
-                          "SELLER\n${listing.seller}\n\n" +
-                          "DESCRIPTION\n${listing.description.ifEmpty { "No description provided." }}"
-                      textSize = 17f
-                      setTextColor(text)
-                      setPadding(0, 5, 0, 20)
-                  }
-
-                  root.addView(details)
-
-                  val back = button("BACK TO LISTINGS")
-                  back.setOnClickListener {
-                      showListings(listing.category)
-                  }
-
-                  root.addView(back)
-
-                  val market = button("MARKETPLACE", true)
-                  market.setOnClickListener {
-                      showMarketplace()
-                  }
-
-                  root.addView(market)
-
-                  setContentView(root)
-              }
-
-              private fun saveListing(listing: Listing) {
-                  val prefs = getSharedPreferences(
-                      "farmersmeet",
-                      Context.MODE_PRIVATE
-                  )
-
-                  val array = JSONArray(
-                      prefs.getString("listings", "[]") ?: "[]"
-                  )
-
-                  val item = JSONObject()
-
-                  item.put("name", listing.name)
-                  item.put("category", listing.category)
-                  item.put("price", listing.price)
-                  item.put("quantity", listing.quantity)
-                  item.put("location", listing.location)
-                  item.put("seller", listing.seller)
-                  item.put("description", listing.description)
-
-                  array.put(item)
-
-                  prefs.edit()
-                      .putString("listings", array.toString())
-                      .apply()
-              }
-
-              private fun getListings(): List<Listing> {
-                  val prefs = getSharedPreferences(
-                      "farmersmeet",
-                      Context.MODE_PRIVATE
-                  )
-
-                  val array = JSONArray(
-                      prefs.getString("listings", "[]") ?: "[]"
-                  )
-
-                  val result = mutableListOf<Listing>()
-
-                  for (i in 0 until array.length()) {
-                      val item = array.getJSONObject(i)
-
-                      result.add(
-                          Listing(
-                              item.optString("name"),
-                              item.optString("category"),
-                              item.optString("price"),
-                              item.optString("quantity"),
-                              item.optString("location"),
-                              item.optString("seller"),
-                              item.optString("description")
-                          )
-                      )
-                  }
-
-                  return result
-             
+          }
+          EOF
+
+      - name: Build APK
+        working-directory: FarmersMeet
+        run: gradle :app:assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FarmersMeet-Stage2-APK
+          path: FarmersMeet/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
