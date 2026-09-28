@@ -7,14 +7,14 @@ on:
       - main
 
 jobs:
-  build:
+  diagnose:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout project
         uses: actions/checkout@v4
 
-      - name: Set up JDK
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -25,11 +25,26 @@ jobs:
         with:
           gradle-version: '8.10'
 
-      - name: Build Debug APK
-        run: gradle :app:assembleDebug
+      - name: Show project structure
+        run: |
+          echo "===== PROJECT STRUCTURE ====="
+          find . -maxdepth 4 -type f | sort
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: FarmersMeet-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+      - name: Show Gradle configuration
+        run: |
+          echo "===== SETTINGS.GRADLE ====="
+          cat settings.gradle || true
+
+          echo "===== ROOT BUILD.GRADLE ====="
+          cat build.gradle || true
+
+          echo "===== APP BUILD.GRADLE ====="
+          cat app/build.gradle || true
+
+      - name: Show available Gradle tasks
+        run: |
+          echo "===== ROOT TASKS ====="
+          gradle tasks --all
+
+          echo "===== APP TASKS ====="
+          gradle :app:tasks --all
