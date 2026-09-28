@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "584375750481",
+    "project_id": "farmersmeet-nigeria",
+    "storage_bucket": "farmersmeet-nigeria.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:584375750481:android:d2beaffc94c4a32fbb8d70",
+        "android_client_info": {
+          "package_name": "ng.farmersmeet.nigeria"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAMJ27zSIYbqdBF5KR3Ctw0spxaezMOnT4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
