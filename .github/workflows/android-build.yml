@@ -20,17 +20,16 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK packages
-        run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10'
 
       - name: Create clean FarmersMeet project
+        shell: bash
         run: |
           rm -rf FarmersMeet
+
           mkdir -p FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria
           mkdir -p FarmersMeet/app/src/main/res/layout
           mkdir -p FarmersMeet/app/src/main/res/values
@@ -174,11 +173,6 @@ jobs:
           <shape xmlns:android="http://schemas.android.com/apk/res/android">
               <solid android:color="@color/farm_green" />
               <corners android:radius="10dp" />
-              <padding
-                  android:left="10dp"
-                  android:right="10dp"
-                  android:top="8dp"
-                  android:bottom="8dp" />
           </shape>
           EOF
 
@@ -187,11 +181,6 @@ jobs:
           <shape xmlns:android="http://schemas.android.com/apk/res/android">
               <solid android:color="@color/farm_yellow" />
               <corners android:radius="10dp" />
-              <padding
-                  android:left="10dp"
-                  android:right="10dp"
-                  android:top="8dp"
-                  android:bottom="8dp" />
           </shape>
           EOF
 
@@ -203,11 +192,6 @@ jobs:
               <stroke
                   android:width="1dp"
                   android:color="#D5E4D7" />
-              <padding
-                  android:left="4dp"
-                  android:right="4dp"
-                  android:top="4dp"
-                  android:bottom="4dp" />
           </shape>
           EOF
 
@@ -494,4 +478,376 @@ jobs:
                       android:layout_height="120dp"
                       android:gravity="top"
                       android:hint="Description"
-                      android:layout_marginTop="1
+                      android:layout_marginTop="10dp" />
+
+                  <Button
+                      android:id="@+id/postButton"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:text="POST LISTING"
+                      android:textColor="@color/farm_text"
+                      android:textStyle="bold"
+                      android:background="@drawable/button_yellow"
+                      android:layout_marginTop="22dp" />
+
+              </LinearLayout>
+          </ScrollView>
+          EOF
+
+          cat > FarmersMeet/app/src/main/res/layout/activity_product.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <ScrollView
+              xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:background="@color/farm_background">
+
+              <LinearLayout
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:orientation="vertical"
+                  android:padding="24dp">
+
+                  <TextView
+                      android:id="@+id/productName"
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:textColor="@color/farm_green"
+                      android:textSize="30sp"
+                      android:textStyle="bold" />
+
+                  <TextView
+                      android:id="@+id/productPrice"
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:textColor="@color/farm_dark_green"
+                      android:textSize="23sp"
+                      android:textStyle="bold"
+                      android:layout_marginTop="12dp" />
+
+                  <TextView
+                      android:id="@+id/productQuantity"
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:textSize="17sp"
+                      android:layout_marginTop="12dp" />
+
+                  <TextView
+                      android:id="@+id/productLocation"
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:textSize="17sp"
+                      android:layout_marginTop="8dp" />
+
+                  <TextView
+                      android:id="@+id/productSeller"
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:textSize="17sp"
+                      android:layout_marginTop="8dp" />
+
+                  <TextView
+                      android:id="@+id/productDescription"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:textSize="17sp"
+                      android:layout_marginTop="20dp" />
+
+              </LinearLayout>
+          </ScrollView>
+          EOF
+
+          cat > FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt <<'EOF'
+          package ng.farmersmeet.nigeria
+
+          import android.content.Intent
+          import android.os.Bundle
+          import android.widget.Button
+          import androidx.appcompat.app.AppCompatActivity
+
+          class MainActivity : AppCompatActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  setContentView(R.layout.activity_main)
+
+                  findViewById<Button>(R.id.marketplaceButton).setOnClickListener {
+                      startActivity(Intent(this, MarketplaceActivity::class.java))
+                  }
+              }
+          }
+          EOF
+
+          cat > FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/MarketplaceActivity.kt <<'EOF'
+          package ng.farmersmeet.nigeria
+
+          import android.content.Intent
+          import android.os.Bundle
+          import android.widget.Button
+          import androidx.appcompat.app.AppCompatActivity
+
+          class MarketplaceActivity : AppCompatActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  setContentView(R.layout.activity_marketplace)
+
+                  val buttons = mapOf(
+                      R.id.cropsButton to "Crops and Farm Produce",
+                      R.id.pigsButton to "Pigs and Piglets",
+                      R.id.fishButton to "Fish and Aquaculture",
+                      R.id.livestockButton to "Other Livestock",
+                      R.id.poultryButton to "Poultry",
+                      R.id.seedsButton to "Seeds and Seedlings",
+                      R.id.equipmentButton to "Farm Equipment"
+                  )
+
+                  buttons.forEach { (id, category) ->
+                      findViewById<Button>(id).setOnClickListener {
+                          startActivity(
+                              Intent(this, ListingsActivity::class.java)
+                                  .putExtra("category", category)
+                          )
+                      }
+                  }
+
+                  findViewById<Button>(R.id.sellButton).setOnClickListener {
+                      startActivity(Intent(this, SellActivity::class.java))
+                  }
+              }
+          }
+          EOF
+
+          cat > FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/ListingsActivity.kt <<'EOF'
+          package ng.farmersmeet.nigeria
+
+          import android.content.Intent
+          import android.graphics.Color
+          import android.os.Bundle
+          import android.view.ViewGroup
+          import android.widget.Button
+          import android.widget.LinearLayout
+          import android.widget.TextView
+          import androidx.appcompat.app.AppCompatActivity
+
+          data class Listing(
+              val name: String,
+              val price: String,
+              val quantity: String,
+              val location: String,
+              val seller: String,
+              val description: String
+          )
+
+          class ListingsActivity : AppCompatActivity() {
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  setContentView(R.layout.activity_listings)
+
+                  val category = intent.getStringExtra("category") ?: ""
+                  findViewById<TextView>(R.id.categoryTitle).text = category
+
+                  val container = findViewById<LinearLayout>(R.id.listingsContainer)
+
+                  sampleListings(category).forEach {
+                      addCard(container, it)
+                  }
+              }
+
+              private fun sampleListings(category: String): List<Listing> {
+                  return when (category) {
+                      "Pigs and Piglets" -> listOf(
+                          Listing("Large White Pig", "₦180,000", "1 pig", "Abakaliki, Ebonyi", "Peace Pig Farm", "Healthy Large White pig suitable for breeding or meat production."),
+                          Listing("Weaner Piglets", "₦65,000", "5 piglets", "Aba, Abia", "Divine Pig Farm", "Healthy weaner piglets ready for farmers."),
+                          Listing("Pregnant Sow", "₦350,000", "1 sow", "Enugu, Enugu", "Green Farm Nigeria", "Healthy pregnant sow available for serious farmers.")
+                      )
+
+                      "Fish and Aquaculture" -> listOf(
+                          Listing("Table-size Catfish", "₦4,500", "20 fish", "Abakaliki, Ebonyi", "Fresh Waters Farm", "Healthy table-size catfish ready for sale."),
+                          Listing("Catfish Fingerlings", "₦35,000", "1,000 fingerlings", "Aba, Abia", "Blue River Farm", "Strong catfish fingerlings for stocking ponds."),
+                          Listing("Tilapia Fish", "₦3,500", "20 fish", "Umuahia, Abia", "Aqua Harvest", "Fresh farm-raised tilapia.")
+                      )
+
+                      "Crops and Farm Produce" -> listOf(
+                          Listing("Fresh Maize", "₦150,000", "10 bags", "Abakaliki, Ebonyi", "John Farms", "Freshly harvested maize."),
+                          Listing("Local Rice", "₦95,000", "5 bags", "Aba, Abia", "Green Valley Farm", "Quality locally produced rice.")
+                      )
+
+                      "Poultry" -> listOf(
+                          Listing("Broiler Chickens", "₦8,500", "1 bird", "Abakaliki, Ebonyi", "Victory Poultry", "Healthy mature broilers."),
+                          Listing("Day Old Chicks", "₦1,200", "1 chick", "Aba, Abia", "Sunrise Poultry", "Quality day-old chicks.")
+                      )
+
+                      "Other Livestock" -> listOf(
+                          Listing("Goats", "₦120,000", "2 goats", "Aba, Abia", "Umuahia Livestock", "Healthy goats available."),
+                          Listing("Sheep", "₦150,000", "1 sheep", "Enugu, Enugu", "Eastern Livestock", "Healthy sheep for sale.")
+                      )
+
+                      "Seeds and Seedlings" -> listOf(
+                          Listing("Hybrid Maize Seeds", "₦25,000", "1 bag", "Enugu, Enugu", "Agro Seed Centre", "Quality hybrid maize seeds."),
+                          Listing("Vegetable Seedlings", "₦5,000", "100 seedlings", "Aba, Abia", "Green Garden", "Healthy vegetable seedlings.")
+                      )
+
+                      else -> listOf(
+                          Listing("Knapsack Sprayer", "₦45,000", "1 unit", "Aba, Abia", "Agro Tools Nigeria", "Farm sprayer suitable for crop protection."),
+                          Listing("Water Pump", "₦120,000", "1 unit", "Abakaliki, Ebonyi", "Farm Equipment Hub", "Petrol water pump for irrigation.")
+                      )
+                  }
+              }
+
+              private fun addCard(container: LinearLayout, listing: Listing) {
+                  val card = LinearLayout(this)
+                  card.orientation = LinearLayout.VERTICAL
+                  card.setPadding(20, 20, 20, 20)
+                  card.setBackgroundResource(R.drawable.card_background)
+
+                  val params = LinearLayout.LayoutParams(
+                      ViewGroup.LayoutParams.MATCH_PARENT,
+                      ViewGroup.LayoutParams.WRAP_CONTENT
+                  )
+                  params.setMargins(0, 0, 0, 18)
+                  card.layoutParams = params
+
+                  fun makeText(value: String, size: Float): TextView {
+                      return TextView(this).apply {
+                          text = value
+                          textSize = size
+                          setTextColor(Color.parseColor("#18351F"))
+                          setPadding(0, 4, 0, 4)
+                      }
+                  }
+
+                  card.addView(makeText(listing.name, 21f))
+                  card.addView(makeText(listing.price, 20f))
+                  card.addView(makeText("Quantity: ${listing.quantity}", 15f))
+                  card.addView(makeText("Location: ${listing.location}", 15f))
+                  card.addView(makeText("Seller: ${listing.seller}", 15f))
+
+                  val button = Button(this)
+                  button.text = "VIEW DETAILS"
+                  button.setTextColor(Color.WHITE)
+                  button.setBackgroundResource(R.drawable.button_green)
+
+                  button.setOnClickListener {
+                      startActivity(
+                          Intent(this, ProductActivity::class.java).apply {
+                              putExtra("name", listing.name)
+                              putExtra("price", listing.price)
+                              putExtra("quantity", listing.quantity)
+                              putExtra("location", listing.location)
+                              putExtra("seller", listing.seller)
+                              putExtra("description", listing.description)
+                          }
+                      )
+                  }
+
+                  card.addView(button)
+                  container.addView(card)
+              }
+          }
+          EOF
+
+          cat > FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/ProductActivity.kt <<'EOF'
+          package ng.farmersmeet.nigeria
+
+          import android.os.Bundle
+          import android.widget.TextView
+          import androidx.appcompat.app.AppCompatActivity
+
+          class ProductActivity : AppCompatActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  setContentView(R.layout.activity_product)
+
+                  findViewById<TextView>(R.id.productName).text =
+                      intent.getStringExtra("name")
+
+                  findViewById<TextView>(R.id.productPrice).text =
+                      intent.getStringExtra("price")
+
+                  findViewById<TextView>(R.id.productQuantity).text =
+                      "Quantity: ${intent.getStringExtra("quantity")}"
+
+                  findViewById<TextView>(R.id.productLocation).text =
+                      "Location: ${intent.getStringExtra("location")}"
+
+                  findViewById<TextView>(R.id.productSeller).text =
+                      "Seller: ${intent.getStringExtra("seller")}"
+
+                  findViewById<TextView>(R.id.productDescription).text =
+                      intent.getStringExtra("description")
+              }
+          }
+          EOF
+
+          cat > FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/SellActivity.kt <<'EOF'
+          package ng.farmersmeet.nigeria
+
+          import android.os.Bundle
+          import android.widget.ArrayAdapter
+          import android.widget.Button
+          import android.widget.EditText
+          import android.widget.Spinner
+          import android.widget.Toast
+          import androidx.appcompat.app.AppCompatActivity
+
+          class SellActivity : AppCompatActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  setContentView(R.layout.activity_sell)
+
+                  val categories = arrayOf(
+                      "Crops and Farm Produce",
+                      "Pigs and Piglets",
+                      "Fish and Aquaculture",
+                      "Other Livestock",
+                      "Poultry",
+                      "Seeds and Seedlings",
+                      "Farm Equipment"
+                  )
+
+                  val spinner = findViewById<Spinner>(R.id.categorySpinner)
+
+                  spinner.adapter = ArrayAdapter(
+                      this,
+                      android.R.layout.simple_spinner_dropdown_item,
+                      categories
+                  )
+
+                  findViewById<Button>(R.id.postButton).setOnClickListener {
+                      val item = findViewById<EditText>(R.id.itemName).text.toString().trim()
+                      val price = findViewById<EditText>(R.id.itemPrice).text.toString().trim()
+                      val quantity = findViewById<EditText>(R.id.itemQuantity).text.toString().trim()
+                      val location = findViewById<EditText>(R.id.itemLocation).text.toString().trim()
+
+                      if (item.isEmpty() || price.isEmpty() ||
+                          quantity.isEmpty() || location.isEmpty()) {
+
+                          Toast.makeText(
+                              this,
+                              "Please complete the required fields.",
+                              Toast.LENGTH_SHORT
+                          ).show()
+
+                          return@setOnClickListener
+                      }
+
+                      Toast.makeText(
+                          this,
+                          "$item is ready to be posted under ${spinner.selectedItem}.",
+                          Toast.LENGTH_LONG
+                      ).show()
+                  }
+              }
+          }
+          EOF
+
+      - name: Build APK
+        working-directory: FarmersMeet
+        run: |
+          gradle :app:assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FarmersMeet-debug-apk
+          path: FarmersMeet/app/build/outputs/apk/debug/app-debug.apk
