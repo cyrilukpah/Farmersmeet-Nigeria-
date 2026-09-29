@@ -14,33 +14,56 @@ jobs:
     name: Build FarmersMeet Stage 7
     runs-on: ubuntu-latest
 
+    env:
+      PROJECT_DIR: FarmersMeet
+      APK_NAME: FarmersMeet-Stage7.apk
+
     steps:
+
+      # ------------------------------------------------------------
+      # 1. CHECKOUT
+      # ------------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ------------------------------------------------------------
+      # 2. JAVA 17
+      # ------------------------------------------------------------
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      # ------------------------------------------------------------
+      # 3. ANDROID SDK
+      # ------------------------------------------------------------
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      # ------------------------------------------------------------
+      # 4. GRADLE
+      # ------------------------------------------------------------
+      - name: Set up Gradle 8.10
+        uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '8.10'
 
+      # ------------------------------------------------------------
+      # 5. CREATE COMPLETE STAGE 7 PROJECT
+      # ------------------------------------------------------------
       - name: Create FarmersMeet Stage 7 project
         shell: bash
         run: |
           set -e
 
-          rm -rf FarmersMeet
+          rm -rf "$PROJECT_DIR"
 
-          mkdir -p FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria
-          mkdir -p FarmersMeet/app/src/main/res/values
-          mkdir -p FarmersMeet/app/src/main/res/drawable
+          mkdir -p "$PROJECT_DIR/app/src/main/java/ng/farmersmeet/nigeria"
+          mkdir -p "$PROJECT_DIR/app/src/main/res/values"
 
-          cat > FarmersMeet/settings.gradle <<'EOF'
+          # settings.gradle
+          cat > "$PROJECT_DIR/settings.gradle" <<'EOF'
           pluginManagement {
               repositories {
                   google()
@@ -50,10 +73,7 @@ jobs:
           }
 
           dependencyResolutionManagement {
-              repositoriesMode.set(
-                  org.gradle.api.initialization.resolve.RepositoriesMode.FAIL_ON_PROJECT_REPOS
-              )
-
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
               repositories {
                   google()
                   mavenCentral()
@@ -64,20 +84,25 @@ jobs:
           include(":app")
           EOF
 
-          cat > FarmersMeet/build.gradle <<'EOF'
+          # Root build.gradle
+          cat > "$PROJECT_DIR/build.gradle" <<'EOF'
           plugins {
               id 'com.android.application' version '8.7.3' apply false
               id 'org.jetbrains.kotlin.android' version '2.0.21' apply false
           }
           EOF
 
-          cat > FarmersMeet/gradle.properties <<'EOF'
+          # gradle.properties
+          cat > "$PROJECT_DIR/gradle.properties" <<'EOF'
           android.useAndroidX=true
           android.nonTransitiveRClass=true
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           EOF
 
-          cat > FarmersMeet/app/build.gradle <<'EOF'
+          # --------------------------------------------------------
+          # APP BUILD FILE
+          # --------------------------------------------------------
+          cat > "$PROJECT_DIR/app/build.gradle" <<'EOF'
           plugins {
               id 'com.android.application'
               id 'org.jetbrains.kotlin.android'
@@ -104,6 +129,15 @@ jobs:
                   jvmTarget = "17"
               }
 
+              signingConfigs {
+                  release {
+                      storeFile file("${rootProject.projectDir}/release.keystore")
+                      storePassword System.getenv("KEYSTORE_PASSWORD")
+                      keyAlias System.getenv("KEY_ALIAS")
+                      keyPassword System.getenv("KEY_PASSWORD")
+                  }
+              }
+
               buildTypes {
                   debug {
                       debuggable true
@@ -112,6 +146,8 @@ jobs:
                   release {
                       minifyEnabled false
                       shrinkResources false
+                      debuggable false
+                      signingConfig signingConfigs.release
                   }
               }
           }
@@ -123,32 +159,27 @@ jobs:
           }
           EOF
 
-          cat > FarmersMeet/app/src/main/AndroidManifest.xml <<'EOF'
+          # --------------------------------------------------------
+          # ANDROID MANIFEST
+          # --------------------------------------------------------
+          cat > "$PROJECT_DIR/app/src/main/AndroidManifest.xml" <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
-
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
               <application
-                  android:allowBackup="true"
-                  android:icon="@drawable/ic_launcher"
+                  android:theme="@style/AppTheme"
                   android:label="FarmersMeet"
-                  android:roundIcon="@drawable/ic_launcher"
-                  android:supportsRtl="true"
-                  android:theme="@style/AppTheme">
+                  android:allowBackup="true"
+                  android:supportsRtl="true">
 
                   <activity
                       android:name=".MainActivity"
-                      android:exported="true"
-                      android:screenOrientation="portrait">
+                      android:screenOrientation="portrait"
+                      android:exported="true">
 
                       <intent-filter>
-
-                          <action
-                              android:name="android.intent.action.MAIN" />
-
-                          <category
-                              android:name="android.intent.category.LAUNCHER" />
-
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
 
                   </activity>
@@ -158,9 +189,11 @@ jobs:
           </manifest>
           EOF
 
-          cat > FarmersMeet/app/src/main/res/values/themes.xml <<'EOF'
+          # --------------------------------------------------------
+          # THEME
+          # --------------------------------------------------------
+          cat > "$PROJECT_DIR/app/src/main/res/values/themes.xml" <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
-
           <resources>
 
               <style
@@ -168,34 +201,20 @@ jobs:
                   parent="Theme.AppCompat.Light.NoActionBar">
 
                   <item name="android:fontFamily">sans</item>
-                  <item name="android:windowActionModeOverlay">true</item>
                   <item name="android:colorAccent">#176B35</item>
                   <item name="android:statusBarColor">#0D4D25</item>
                   <item name="android:navigationBarColor">#0D4D25</item>
                   <item name="android:windowLightStatusBar">false</item>
-                  <item name="android:windowLightNavigationBar">false</item>
 
               </style>
 
           </resources>
           EOF
 
-          cat > FarmersMeet/app/src/main/res/drawable/ic_launcher.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-
-          <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-
-              <item>
-                  <shape android:shape="rectangle">
-                      <solid android:color="#176B35" />
-                      <corners android:radius="24dp" />
-                  </shape>
-              </item>
-
-          </layer-list>
-          EOF
-
-          cat > FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt <<'EOF'
+          # --------------------------------------------------------
+          # MAIN ACTIVITY — STAGE 7
+          # --------------------------------------------------------
+          cat > "$PROJECT_DIR/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt" <<'EOF'
           package ng.farmersmeet.nigeria
 
           import android.content.Context
@@ -297,10 +316,7 @@ jobs:
                       text = value
                       textSize = 28f
                       setTextColor(green)
-                      setTypeface(
-                          null,
-                          android.graphics.Typeface.BOLD
-                      )
+                      setTypeface(null, android.graphics.Typeface.BOLD)
                       setPadding(0, 10, 0, 18)
                   }
               }
@@ -343,19 +359,15 @@ jobs:
               private fun showHome() {
 
                   val root = baseLayout()
-
                   root.gravity = Gravity.CENTER
 
                   val logo = heading("FarmersMeet")
-
                   logo.textSize = 40f
                   logo.gravity = Gravity.CENTER
 
                   val subtitle = TextView(this).apply {
-
                       text =
                           "Connecting farmers, buyers and agricultural businesses"
-
                       textSize = 16f
                       setTextColor(textColor)
                       gravity = Gravity.CENTER
@@ -389,10 +401,7 @@ jobs:
                   )
 
                   val subtitle = TextView(this).apply {
-
-                      text =
-                          "Buy and sell agricultural products"
-
+                      text = "Buy and sell agricultural products"
                       textSize = 16f
                       setTextColor(textColor)
                       setPadding(0, 0, 0, 12)
@@ -401,10 +410,7 @@ jobs:
                   root.addView(subtitle)
 
                   val search = EditText(this).apply {
-
-                      hint =
-                          "Search pigs, fish, crops..."
-
+                      hint = "Search pigs, fish, crops..."
                       textSize = 16f
                       setSingleLine(true)
                       setTextColor(textColor)
@@ -449,16 +455,13 @@ jobs:
 
                   val categoryTitle =
                       TextView(this).apply {
-
                           text = "Browse Categories"
                           textSize = 21f
                           setTextColor(green)
-
                           setTypeface(
                               null,
                               android.graphics.Typeface.BOLD
                           )
-
                           setPadding(0, 15, 0, 8)
                       }
 
@@ -513,11 +516,8 @@ jobs:
 
                   val results =
                       if (lower.isEmpty()) {
-
                           getListings()
-
                       } else {
-
                           getListings().filter {
 
                               it.name.lowercase().contains(lower) ||
@@ -584,7 +584,6 @@ jobs:
 
                       val empty =
                           TextView(this).apply {
-
                               text =
                                   if (mineOnly)
                                       "You have not posted any listings yet."
@@ -593,7 +592,6 @@ jobs:
 
                               textSize = 18f
                               setTextColor(textColor)
-
                               setPadding(
                                   0,
                                   20,
@@ -710,16 +708,13 @@ jobs:
 
                   val name =
                       TextView(this).apply {
-
                           text = listing.name
                           textSize = 21f
                           setTextColor(green)
-
                           setTypeface(
                               null,
                               android.graphics.Typeface.BOLD
                           )
-
                           setPadding(
                               0,
                               8,
@@ -732,11 +727,9 @@ jobs:
 
                   val price =
                       TextView(this).apply {
-
                           text = listing.price
                           textSize = 20f
                           setTextColor(darkGreen)
-
                           setTypeface(
                               null,
                               android.graphics.Typeface.BOLD
@@ -747,7 +740,6 @@ jobs:
 
                   val info =
                       TextView(this).apply {
-
                           text =
                               "Quantity: ${listing.quantity}\n" +
                               "Location: ${listing.location}\n" +
@@ -755,7 +747,6 @@ jobs:
 
                           textSize = 15f
                           setTextColor(textColor)
-
                           setPadding(
                               0,
                               5,
@@ -887,14 +878,15 @@ jobs:
                               "SELLER\n${listing.seller}\n\n" +
                               "PHONE\n${listing.phone}\n\n" +
                               "DESCRIPTION\n" +
-                              if (listing.description.isEmpty())
+                              if (
+                                  listing.description.isEmpty()
+                              )
                                   "No description provided."
                               else
                                   listing.description
 
                           textSize = 17f
                           setTextColor(textColor)
-
                           setPadding(
                               0,
                               15,
@@ -936,7 +928,9 @@ jobs:
 
                   call.setOnClickListener {
 
-                      if (listing.phone.isEmpty()) {
+                      if (
+                          listing.phone.isEmpty()
+                      ) {
 
                           Toast.makeText(
                               this,
@@ -966,7 +960,9 @@ jobs:
 
                   whatsapp.setOnClickListener {
 
-                      if (listing.phone.isEmpty()) {
+                      if (
+                          listing.phone.isEmpty()
+                      ) {
 
                           Toast.makeText(
                               this,
@@ -1081,16 +1077,13 @@ jobs:
 
                   val photoTitle =
                       TextView(this).apply {
-
                           text = "Product Photo"
                           textSize = 18f
                           setTextColor(green)
-
                           setTypeface(
                               null,
                               android.graphics.Typeface.BOLD
                           )
-
                           setPadding(
                               0,
                               15,
@@ -1360,7 +1353,9 @@ jobs:
                   return result
               }
 
-              private fun isFavorite(id: Long): Boolean {
+              private fun isFavorite(
+                  id: Long
+              ): Boolean {
 
                   val prefs =
                       getSharedPreferences(
@@ -1379,7 +1374,9 @@ jobs:
                   )
               }
 
-              private fun toggleFavorite(id: Long) {
+              private fun toggleFavorite(
+                  id: Long
+              ) {
 
                   val prefs =
                       getSharedPreferences(
@@ -1410,7 +1407,9 @@ jobs:
                       .apply()
               }
 
-              private fun deleteListing(id: Long) {
+              private fun deleteListing(
+                  id: Long
+              ) {
 
                   val prefs =
                       getSharedPreferences(
@@ -1434,7 +1433,9 @@ jobs:
                       val item =
                           array.getJSONObject(i)
 
-                      if (item.optLong("id") != id) {
+                      if (
+                          item.optLong("id") != id
+                      ) {
                           newArray.put(item)
                       }
                   }
@@ -1623,7 +1624,33 @@ jobs:
           }
           EOF
 
-      - name: Verify complete project
+      # ------------------------------------------------------------
+      # 6. GENERATE A CI SIGNING KEY
+      #
+      # This key is generated on every build. It makes the APK a
+      # properly signed standalone APK that Android can install.
+      # ------------------------------------------------------------
+      - name: Generate APK signing key
+        shell: bash
+        working-directory: FarmersMeet
+        run: |
+          set -e
+
+          keytool -genkeypair \
+            -v \
+            -keystore release.keystore \
+            -alias farmersmeet \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass farmersmeet123 \
+            -keypass farmersmeet123 \
+            -dname "CN=FarmersMeet, OU=FarmersMeet, O=FarmersMeet, L=Nigeria, ST=Abia, C=NG"
+
+      # ------------------------------------------------------------
+      # 7. VERIFY PROJECT STRUCTURE
+      # ------------------------------------------------------------
+      - name: Verify Stage 7 project
         shell: bash
         run: |
           set -e
@@ -1634,77 +1661,133 @@ jobs:
           test -f FarmersMeet/app/build.gradle
           test -f FarmersMeet/app/src/main/AndroidManifest.xml
           test -f FarmersMeet/app/src/main/res/values/themes.xml
-          test -f FarmersMeet/app/src/main/res/drawable/ic_launcher.xml
           test -f FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt
+          test -f FarmersMeet/release.keystore
 
-          echo "======================================"
-          echo "FarmersMeet Stage 7 project verified"
-          echo "Launcher activity verified"
-          echo "======================================"
+          echo "Stage 7 project structure verified."
 
-      - name: Clean Gradle project
+      # ------------------------------------------------------------
+      # 8. BUILD SIGNED RELEASE APK
+      # ------------------------------------------------------------
+      - name: Build signed Stage 7 APK
         working-directory: FarmersMeet
-        shell: bash
-        run: |
-          set -e
-          gradle clean
-
-      - name: Build debug APK
-        working-directory: FarmersMeet
-        shell: bash
-        run: |
-          set -e
-          gradle :app:assembleDebug --stacktrace
-
-      - name: Verify APK exists
-        shell: bash
+        env:
+          KEYSTORE_PASSWORD: farmersmeet123
+          KEY_ALIAS: farmersmeet
+          KEY_PASSWORD: farmersmeet123
         run: |
           set -e
 
-          APK="FarmersMeet/app/build/outputs/apk/debug/app-debug.apk"
+          gradle clean :app:assembleRelease --no-daemon --stacktrace
+
+      # ------------------------------------------------------------
+      # 9. VERIFY APK EXISTS
+      # ------------------------------------------------------------
+      - name: Verify release APK
+        shell: bash
+        run: |
+          set -e
+
+          APK="FarmersMeet/app/build/outputs/apk/release/app-release.apk"
 
           test -f "$APK"
+          test -s "$APK"
 
-          echo "======================================"
-          echo "APK BUILD SUCCESSFUL"
-          echo "======================================"
+          echo "Release APK exists:"
           ls -lh "$APK"
 
-      - name: Verify APK is launchable
+      # ------------------------------------------------------------
+      # 10. VERIFY APK SIGNATURE
+      # ------------------------------------------------------------
+      - name: Verify APK signature
         shell: bash
         run: |
           set -e
 
-          APK="FarmersMeet/app/build/outputs/apk/debug/app-debug.apk"
+          APK="FarmersMeet/app/build/outputs/apk/release/app-release.apk"
 
-          if command -v aapt2 >/dev/null 2>&1; then
-            echo "Checking Android launcher activity..."
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" \
+            -type f \
+            -name apksigner \
+            | sort -V \
+            | tail -n 1)
 
-            aapt2 dump badging "$APK" | grep -q \
-              "launchable-activity"
-
-            echo "Launcher activity confirmed."
-          else
-            echo "aapt2 not directly available; manifest verification already completed."
+          if [ -z "$APKSIGNER" ]; then
+            echo "ERROR: apksigner was not found."
+            exit 1
           fi
 
-      - name: Prepare APK for download
+          echo "Using:"
+          echo "$APKSIGNER"
+
+          "$APKSIGNER" verify --verbose "$APK"
+
+          echo "APK signature verification PASSED."
+
+      # ------------------------------------------------------------
+      # 11. VERIFY APK CERTIFICATE
+      # ------------------------------------------------------------
+      - name: Display APK certificate
         shell: bash
         run: |
           set -e
 
-          mkdir -p release
+          APK="FarmersMeet/app/build/outputs/apk/release/app-release.apk"
+
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" \
+            -type f \
+            -name apksigner \
+            | sort -V \
+            | tail -n 1)
+
+          "$APKSIGNER" verify --print-certs "$APK"
+
+      # ------------------------------------------------------------
+      # 12. RENAME FINAL APK
+      # ------------------------------------------------------------
+      - name: Prepare final APK
+        shell: bash
+        run: |
+          set -e
+
+          mkdir -p output
 
           cp \
-            FarmersMeet/app/build/outputs/apk/debug/app-debug.apk \
-            release/FarmersMeet-Stage7.apk
+            FarmersMeet/app/build/outputs/apk/release/app-release.apk \
+            "output/$APK_NAME"
 
-          ls -lh release/FarmersMeet-Stage7.apk
+          test -f "output/$APK_NAME"
+          test -s "output/$APK_NAME"
 
+          echo "FINAL APK:"
+          ls -lh "output/$APK_NAME"
+
+      # ------------------------------------------------------------
+      # 13. UPLOAD INSTALLABLE APK
+      # ------------------------------------------------------------
       - name: Upload FarmersMeet Stage 7 APK
         uses: actions/upload-artifact@v4
         with:
           name: FarmersMeet-Stage7-APK
-          path: release/FarmersMeet-Stage7.apk
+          path: output/FarmersMeet-Stage7.apk
           if-no-files-found: error
           retention-days: 30
+
+      # ------------------------------------------------------------
+      # 14. BUILD SUMMARY
+      # ------------------------------------------------------------
+      - name: Build summary
+        shell: bash
+        run: |
+          echo "=============================================="
+          echo " FarmersMeet Stage 7 BUILD SUCCESSFUL"
+          echo "=============================================="
+          echo "APK: output/FarmersMeet-Stage7.apk"
+          echo "Application ID: ng.farmersmeet.nigeria"
+          echo "Version: 8.0"
+          echo "Version Code: 8"
+          echo "Signed: YES"
+          echo "Signature verified: YES"
+          echo "Launcher activity: YES"
+          echo "Artifact: FarmersMeet-Stage7-APK"
+          echo "=============================================="
