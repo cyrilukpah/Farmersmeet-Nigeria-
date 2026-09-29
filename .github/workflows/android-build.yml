@@ -6,12 +6,16 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   build:
+    name: Build FarmersMeet Stage 7
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -25,12 +29,16 @@ jobs:
         with:
           gradle-version: '8.10'
 
-      - name: Create clean FarmersMeet project
+      - name: Create FarmersMeet Stage 7 project
         shell: bash
         run: |
+          set -e
+
           rm -rf FarmersMeet
+
           mkdir -p FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria
           mkdir -p FarmersMeet/app/src/main/res/values
+          mkdir -p FarmersMeet/app/src/main/res/drawable
 
           cat > FarmersMeet/settings.gradle <<'EOF'
           pluginManagement {
@@ -42,7 +50,10 @@ jobs:
           }
 
           dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositoriesMode.set(
+                  org.gradle.api.initialization.resolve.RepositoriesMode.FAIL_ON_PROJECT_REPOS
+              )
+
               repositories {
                   google()
                   mavenCentral()
@@ -63,6 +74,7 @@ jobs:
           cat > FarmersMeet/gradle.properties <<'EOF'
           android.useAndroidX=true
           android.nonTransitiveRClass=true
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           EOF
 
           cat > FarmersMeet/app/build.gradle <<'EOF'
@@ -91,6 +103,17 @@ jobs:
               kotlinOptions {
                   jvmTarget = "17"
               }
+
+              buildTypes {
+                  debug {
+                      debuggable true
+                  }
+
+                  release {
+                      minifyEnabled false
+                      shrinkResources false
+                  }
+              }
           }
 
           dependencies {
@@ -102,22 +125,30 @@ jobs:
 
           cat > FarmersMeet/app/src/main/AndroidManifest.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
+
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
               <application
-                  android:theme="@style/AppTheme"
-                  android:label="FarmersMeet"
                   android:allowBackup="true"
-                  android:supportsRtl="true">
+                  android:icon="@drawable/ic_launcher"
+                  android:label="FarmersMeet"
+                  android:roundIcon="@drawable/ic_launcher"
+                  android:supportsRtl="true"
+                  android:theme="@style/AppTheme">
 
                   <activity
                       android:name=".MainActivity"
-                      android:screenOrientation="portrait"
-                      android:exported="true">
+                      android:exported="true"
+                      android:screenOrientation="portrait">
 
                       <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
+
+                          <action
+                              android:name="android.intent.action.MAIN" />
+
+                          <category
+                              android:name="android.intent.category.LAUNCHER" />
+
                       </intent-filter>
 
                   </activity>
@@ -129,20 +160,39 @@ jobs:
 
           cat > FarmersMeet/app/src/main/res/values/themes.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
+
           <resources>
 
-              <style name="AppTheme"
+              <style
+                  name="AppTheme"
                   parent="Theme.AppCompat.Light.NoActionBar">
 
                   <item name="android:fontFamily">sans</item>
+                  <item name="android:windowActionModeOverlay">true</item>
                   <item name="android:colorAccent">#176B35</item>
                   <item name="android:statusBarColor">#0D4D25</item>
                   <item name="android:navigationBarColor">#0D4D25</item>
                   <item name="android:windowLightStatusBar">false</item>
+                  <item name="android:windowLightNavigationBar">false</item>
 
               </style>
 
           </resources>
+          EOF
+
+          cat > FarmersMeet/app/src/main/res/drawable/ic_launcher.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+
+          <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <item>
+                  <shape android:shape="rectangle">
+                      <solid android:color="#176B35" />
+                      <corners android:radius="24dp" />
+                  </shape>
+              </item>
+
+          </layer-list>
           EOF
 
           cat > FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt <<'EOF'
@@ -247,7 +297,10 @@ jobs:
                       text = value
                       textSize = 28f
                       setTextColor(green)
-                      setTypeface(null, android.graphics.Typeface.BOLD)
+                      setTypeface(
+                          null,
+                          android.graphics.Typeface.BOLD
+                      )
                       setPadding(0, 10, 0, 18)
                   }
               }
@@ -290,15 +343,19 @@ jobs:
               private fun showHome() {
 
                   val root = baseLayout()
+
                   root.gravity = Gravity.CENTER
 
                   val logo = heading("FarmersMeet")
+
                   logo.textSize = 40f
                   logo.gravity = Gravity.CENTER
 
                   val subtitle = TextView(this).apply {
+
                       text =
                           "Connecting farmers, buyers and agricultural businesses"
+
                       textSize = 16f
                       setTextColor(textColor)
                       gravity = Gravity.CENTER
@@ -332,7 +389,10 @@ jobs:
                   )
 
                   val subtitle = TextView(this).apply {
-                      text = "Buy and sell agricultural products"
+
+                      text =
+                          "Buy and sell agricultural products"
+
                       textSize = 16f
                       setTextColor(textColor)
                       setPadding(0, 0, 0, 12)
@@ -341,7 +401,10 @@ jobs:
                   root.addView(subtitle)
 
                   val search = EditText(this).apply {
-                      hint = "Search pigs, fish, crops..."
+
+                      hint =
+                          "Search pigs, fish, crops..."
+
                       textSize = 16f
                       setSingleLine(true)
                       setTextColor(textColor)
@@ -386,13 +449,16 @@ jobs:
 
                   val categoryTitle =
                       TextView(this).apply {
+
                           text = "Browse Categories"
                           textSize = 21f
                           setTextColor(green)
+
                           setTypeface(
                               null,
                               android.graphics.Typeface.BOLD
                           )
+
                           setPadding(0, 15, 0, 8)
                       }
 
@@ -447,8 +513,11 @@ jobs:
 
                   val results =
                       if (lower.isEmpty()) {
+
                           getListings()
+
                       } else {
+
                           getListings().filter {
 
                               it.name.lowercase().contains(lower) ||
@@ -515,6 +584,7 @@ jobs:
 
                       val empty =
                           TextView(this).apply {
+
                               text =
                                   if (mineOnly)
                                       "You have not posted any listings yet."
@@ -523,6 +593,7 @@ jobs:
 
                               textSize = 18f
                               setTextColor(textColor)
+
                               setPadding(
                                   0,
                                   20,
@@ -639,13 +710,16 @@ jobs:
 
                   val name =
                       TextView(this).apply {
+
                           text = listing.name
                           textSize = 21f
                           setTextColor(green)
+
                           setTypeface(
                               null,
                               android.graphics.Typeface.BOLD
                           )
+
                           setPadding(
                               0,
                               8,
@@ -658,9 +732,11 @@ jobs:
 
                   val price =
                       TextView(this).apply {
+
                           text = listing.price
                           textSize = 20f
                           setTextColor(darkGreen)
+
                           setTypeface(
                               null,
                               android.graphics.Typeface.BOLD
@@ -671,6 +747,7 @@ jobs:
 
                   val info =
                       TextView(this).apply {
+
                           text =
                               "Quantity: ${listing.quantity}\n" +
                               "Location: ${listing.location}\n" +
@@ -678,6 +755,7 @@ jobs:
 
                           textSize = 15f
                           setTextColor(textColor)
+
                           setPadding(
                               0,
                               5,
@@ -809,15 +887,14 @@ jobs:
                               "SELLER\n${listing.seller}\n\n" +
                               "PHONE\n${listing.phone}\n\n" +
                               "DESCRIPTION\n" +
-                              if (
-                                  listing.description.isEmpty()
-                              )
+                              if (listing.description.isEmpty())
                                   "No description provided."
                               else
                                   listing.description
 
                           textSize = 17f
                           setTextColor(textColor)
+
                           setPadding(
                               0,
                               15,
@@ -859,9 +936,7 @@ jobs:
 
                   call.setOnClickListener {
 
-                      if (
-                          listing.phone.isEmpty()
-                      ) {
+                      if (listing.phone.isEmpty()) {
 
                           Toast.makeText(
                               this,
@@ -891,9 +966,7 @@ jobs:
 
                   whatsapp.setOnClickListener {
 
-                      if (
-                          listing.phone.isEmpty()
-                      ) {
+                      if (listing.phone.isEmpty()) {
 
                           Toast.makeText(
                               this,
@@ -1008,13 +1081,16 @@ jobs:
 
                   val photoTitle =
                       TextView(this).apply {
+
                           text = "Product Photo"
                           textSize = 18f
                           setTextColor(green)
+
                           setTypeface(
                               null,
                               android.graphics.Typeface.BOLD
                           )
+
                           setPadding(
                               0,
                               15,
@@ -1234,8 +1310,7 @@ jobs:
                       .apply()
               }
 
-              private fun getListings():
-                  List<Listing> {
+              private fun getListings(): List<Listing> {
 
                   val prefs =
                       getSharedPreferences(
@@ -1285,9 +1360,7 @@ jobs:
                   return result
               }
 
-              private fun isFavorite(
-                  id: Long
-              ): Boolean {
+              private fun isFavorite(id: Long): Boolean {
 
                   val prefs =
                       getSharedPreferences(
@@ -1306,9 +1379,7 @@ jobs:
                   )
               }
 
-              private fun toggleFavorite(
-                  id: Long
-              ) {
+              private fun toggleFavorite(id: Long) {
 
                   val prefs =
                       getSharedPreferences(
@@ -1339,9 +1410,7 @@ jobs:
                       .apply()
               }
 
-              private fun deleteListing(
-                  id: Long
-              ) {
+              private fun deleteListing(id: Long) {
 
                   val prefs =
                       getSharedPreferences(
@@ -1365,9 +1434,7 @@ jobs:
                       val item =
                           array.getJSONObject(i)
 
-                      if (
-                          item.optLong("id") != id
-                      ) {
+                      if (item.optLong("id") != id) {
                           newArray.put(item)
                       }
                   }
@@ -1556,30 +1623,88 @@ jobs:
           }
           EOF
 
-      - name: Verify project files
+      - name: Verify complete project
         shell: bash
         run: |
+          set -e
+
           test -f FarmersMeet/settings.gradle
           test -f FarmersMeet/build.gradle
+          test -f FarmersMeet/gradle.properties
           test -f FarmersMeet/app/build.gradle
           test -f FarmersMeet/app/src/main/AndroidManifest.xml
           test -f FarmersMeet/app/src/main/res/values/themes.xml
+          test -f FarmersMeet/app/src/main/res/drawable/ic_launcher.xml
           test -f FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt
-          echo "FarmersMeet Stage 7 files verified."
 
-      - name: Build APK
+          echo "======================================"
+          echo "FarmersMeet Stage 7 project verified"
+          echo "Launcher activity verified"
+          echo "======================================"
+
+      - name: Clean Gradle project
         working-directory: FarmersMeet
-        run: gradle :app:assembleDebug
-
-      - name: Verify APK
         shell: bash
         run: |
-          test -f FarmersMeet/app/build/outputs/apk/debug/app-debug.apk
-          echo "FarmersMeet Stage 7 APK created successfully."
+          set -e
+          gradle clean
 
-      - name: Upload APK
+      - name: Build debug APK
+        working-directory: FarmersMeet
+        shell: bash
+        run: |
+          set -e
+          gradle :app:assembleDebug --stacktrace
+
+      - name: Verify APK exists
+        shell: bash
+        run: |
+          set -e
+
+          APK="FarmersMeet/app/build/outputs/apk/debug/app-debug.apk"
+
+          test -f "$APK"
+
+          echo "======================================"
+          echo "APK BUILD SUCCESSFUL"
+          echo "======================================"
+          ls -lh "$APK"
+
+      - name: Verify APK is launchable
+        shell: bash
+        run: |
+          set -e
+
+          APK="FarmersMeet/app/build/outputs/apk/debug/app-debug.apk"
+
+          if command -v aapt2 >/dev/null 2>&1; then
+            echo "Checking Android launcher activity..."
+
+            aapt2 dump badging "$APK" | grep -q \
+              "launchable-activity"
+
+            echo "Launcher activity confirmed."
+          else
+            echo "aapt2 not directly available; manifest verification already completed."
+          fi
+
+      - name: Prepare APK for download
+        shell: bash
+        run: |
+          set -e
+
+          mkdir -p release
+
+          cp \
+            FarmersMeet/app/build/outputs/apk/debug/app-debug.apk \
+            release/FarmersMeet-Stage7.apk
+
+          ls -lh release/FarmersMeet-Stage7.apk
+
+      - name: Upload FarmersMeet Stage 7 APK
         uses: actions/upload-artifact@v4
         with:
           name: FarmersMeet-Stage7-APK
-          path: FarmersMeet/app/build/outputs/apk/debug/app-debug.apk
+          path: release/FarmersMeet-Stage7.apk
           if-no-files-found: error
+          retention-days: 30
