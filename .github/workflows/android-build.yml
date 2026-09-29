@@ -19,62 +19,88 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: '17'
 
-      - name: Set up Gradle 8.7
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.7"
+          gradle-version: '8.10'
 
-      - name: Extract actual FarmersMeet source
+      - name: Extract Stage 10 source
         shell: bash
         run: |
           set -euo pipefail
 
           ZIP="FarmersMeet_Nigeria_V2_Full_Source.zip"
 
-          test -f "$ZIP"
+          if [ ! -f "$ZIP" ]; then
+            echo "ERROR: Source archive not found:"
+            echo "$ZIP"
+            echo
+            echo "Repository contents:"
+            find . -maxdepth 3 -type f | sort
+            exit 1
+          fi
 
-          rm -rf FarmersMeet_V2
+          rm -rf FarmersMeet
 
-          unzip -q "$ZIP"
+          mkdir -p FarmersMeet
 
-          test -d FarmersMeet_V2/android
-          test -f FarmersMeet_V2/android/settings.gradle
-          test -f FarmersMeet_V2/android/build.gradle
-          test -f FarmersMeet_V2/android/app/build.gradle
-          test -f FarmersMeet_V2/android/app/src/main/AndroidManifest.xml
-          test -f FarmersMeet_V2/android/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt
+          unzip -q "$ZIP" -d FarmersMeet
 
-          echo "Actual FarmersMeet Android project found."
+          echo "Extracted archive contents:"
+          find FarmersMeet -maxdepth 3 -type f | sort | head -100
+
+          # The supplied archive contains FarmersMeet_V2/android.
+          # The proven Stage 7 build expects the Android project at
+          # FarmersMeet/, so place the actual Android project there.
+          if [ -d "FarmersMeet/FarmersMeet_V2/android" ]; then
+            rm -rf FarmersMeet/build-source
+            cp -a FarmersMeet/FarmersMeet_V2/android FarmersMeet/build-source
+          elif [ -d "FarmersMeet/android" ]; then
+            rm -rf FarmersMeet/build-source
+            cp -a FarmersMeet/android FarmersMeet/build-source
+          else
+            echo "ERROR: Could not locate the Android project inside the archive."
+            find FarmersMeet -maxdepth 5 -type d | sort
+            exit 1
+          fi
+
+          test -f FarmersMeet/build-source/settings.gradle
+          test -f FarmersMeet/build-source/build.gradle
+          test -f FarmersMeet/build-source/app/build.gradle
+          test -f FarmersMeet/build-source/app/src/main/AndroidManifest.xml
+
+          echo "Actual Android project located successfully."
 
       - name: Install Firebase configuration
         shell: bash
         run: |
           set -euo pipefail
 
-          mkdir -p FarmersMeet_V2/android/app
+          APP="FarmersMeet/build-source/app"
+
+          mkdir -p "$APP"
 
           if [ -f "Settings/google-services.json" ]; then
-            cp "Settings/google-services.json" \
-              "FarmersMeet_V2/android/app/google-services.json"
-
+            cp "Settings/google-services.json" "$APP/google-services.json"
           elif [ -f "google-services.json" ]; then
-            cp "google-services.json" \
-              "FarmersMeet_V2/android/app/google-services.json"
-
+            cp "google-services.json" "$APP/google-services.json"
           else
             echo "ERROR: google-services.json was not found."
             echo
-            echo "The Firebase configuration must be present in the repository."
+            echo "Expected it in:"
+            echo "  Settings/google-services.json"
+            echo "or"
+            echo "  google-services.json"
             exit 1
           fi
 
-          test -s FarmersMeet_V2/android/app/google-services.json
+          test -s "$APP/google-services.json"
 
           echo "Firebase configuration installed."
 
@@ -85,19 +111,17 @@ jobs:
 
           python3 - <<'PY'
           import json
+          import sys
 
-          path = "FarmersMeet_V2/android/app/google-services.json"
+          path = "FarmersMeet/build-source/app/google-services.json"
+          expected = "ng.farmersmeet.nigeria"
 
           with open(path, "r", encoding="utf-8") as f:
               data = json.load(f)
 
-          expected = "ng.farmersmeet.nigeria"
-
-          clients = data.get("client", [])
-
           packages = []
 
-          for client in clients:
+          for client in data.get("client", []):
               package_name = (
                   client
                   .get("client_info", {})
@@ -108,17 +132,18 @@ jobs:
               if package_name:
                   packages.append(package_name)
 
-          print("Firebase packages found:")
+          print("Firebase Android package(s):")
           for package_name in packages:
               print("  " + package_name)
 
           if expected not in packages:
-              raise SystemExit(
-                  "Firebase package mismatch. "
-                  f"Expected {expected}, found {packages}"
-              )
+              print()
+              print("ERROR: Firebase package mismatch.")
+              print("Expected:", expected)
+              print("Found:", packages)
+              sys.exit(1)
 
-          print("Firebase package verification passed.")
+          print("Firebase package verification PASSED.")
           PY
 
       - name: Configure Google Services plugin
@@ -126,7 +151,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          PROJECT="FarmersMeet_V2/android"
+          PROJECT="FarmersMeet/build-source"
 
           cat > "$PROJECT/build.gradle" <<'EOF'
           plugins {
@@ -139,115 +164,84 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path(
-              "FarmersMeet_V2/android/app/build.gradle"
-          )
-
+          path = Path("FarmersMeet/build-source/app/build.gradle")
           text = path.read_text()
 
           if "com.google.gms.google-services" not in text:
-              text = text.replace(
-                  "id 'org.jetbrains.kotlin.android'\n",
-                  "id 'org.jetbrains.kotlin.android'\n"
-                  "    id 'com.google.gms.google-services'\n"
-              )
+              marker = "id 'org.jetbrains.kotlin.android'"
 
-          if "compileOptions" not in text:
-              text += """
-
-          android {
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-
-              kotlinOptions {
-                  jvmTarget = '17'
-              }
-          }
-          """
+              if marker in text:
+                  text = text.replace(
+                      marker,
+                      marker + "\n    id 'com.google.gms.google-services'",
+                      1
+                  )
+              else:
+                  text = (
+                      "plugins {\n"
+                      "    id 'com.android.application'\n"
+                      "    id 'org.jetbrains.kotlin.android'\n"
+                      "    id 'com.google.gms.google-services'\n"
+                      "}\n\n"
+                      + text
+                  )
 
           path.write_text(text)
           PY
 
           echo "Google Services plugin configured."
 
-      - name: Verify Gradle configuration
+      - name: Verify project configuration
         shell: bash
         run: |
           set -euo pipefail
 
-          PROJECT="FarmersMeet_V2/android"
+          PROJECT="FarmersMeet/build-source"
 
-          grep -q "com.android.application" \
-            "$PROJECT/build.gradle"
+          grep -q "com.android.application" "$PROJECT/build.gradle"
+          grep -q "com.google.gms.google-services" "$PROJECT/build.gradle"
+          grep -q "com.google.gms.google-services" "$PROJECT/app/build.gradle"
 
-          grep -q "com.google.gms.google-services" \
-            "$PROJECT/build.gradle"
+          grep -q "firebase-auth" "$PROJECT/app/build.gradle"
+          grep -q "firebase-firestore" "$PROJECT/app/build.gradle"
+          grep -q "firebase-storage" "$PROJECT/app/build.gradle"
 
-          grep -q "com.google.gms.google-services" \
-            "$PROJECT/app/build.gradle"
+          echo "Project configuration verified."
 
-          grep -q "firebase-auth" \
-            "$PROJECT/app/build.gradle"
-
-          grep -q "firebase-firestore" \
-            "$PROJECT/app/build.gradle"
-
-          grep -q "firebase-storage" \
-            "$PROJECT/app/build.gradle"
-
-          grep -q "ng.farmersmeet.nigeria" \
-            "$PROJECT/app/build.gradle"
-
-          echo "Gradle configuration verified."
-
-      - name: Show Gradle and Android environment
+      - name: Build APK
+        working-directory: FarmersMeet/build-source
         shell: bash
         run: |
           set -euo pipefail
 
-          gradle --version
-
-          echo
-          echo "ANDROID_HOME=${ANDROID_HOME:-}"
-          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-}"
-
-          test -n "${ANDROID_HOME:-}"
-          test -d "$ANDROID_HOME"
-
-      - name: Build Stage 10 APK
-        working-directory: FarmersMeet_V2/android
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          gradle \
-            --no-daemon \
-            --stacktrace \
-            clean \
-            :app:assembleDebug
+          gradle :app:assembleDebug --stacktrace
 
       - name: Verify APK
         shell: bash
         run: |
           set -euo pipefail
 
-          APK="FarmersMeet_V2/android/app/build/outputs/apk/debug/app-debug.apk"
+          APK="FarmersMeet/build-source/app/build/outputs/apk/debug/app-debug.apk"
 
-          test -s "$APK"
+          if [ ! -s "$APK" ]; then
+            echo "ERROR: APK was not produced."
+            echo
+            echo "APK files found:"
+            find FarmersMeet -type f -name "*.apk" -print || true
+            exit 1
+          fi
 
           echo
           echo "=========================================="
-          echo " FARMERSMEET STAGE 10 APK BUILT"
+          echo " FARMERSMEET STAGE 10 APK SUCCESS"
           echo "=========================================="
           echo
 
           ls -lh "$APK"
 
-      - name: Upload Stage 10 APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: FarmersMeet-Stage-10-APK
-          path: FarmersMeet_V2/android/app/build/outputs/apk/debug/app-debug.apk
+          path: FarmersMeet/build-source/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
