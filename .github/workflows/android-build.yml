@@ -15,94 +15,117 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
+
+      # ============================================================
+      # 1. CHECK OUT REPOSITORY
+      # ============================================================
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+
+      # ============================================================
+      # 2. JAVA 17
+      # ============================================================
+
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
-          cache: gradle
 
-      - name: Configure Android SDK
+
+      # ============================================================
+      # 3. LOCATE AND PREPARE ANDROID SDK
+      # ============================================================
+
+      - name: Prepare Android SDK
         shell: bash
         run: |
-          set -e
+          set -euxo pipefail
 
           if [ -z "${ANDROID_HOME:-}" ]; then
             export ANDROID_HOME="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
           fi
 
-          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          if [ -z "${ANDROID_SDK_ROOT:-}" ]; then
+            export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          fi
 
           echo "ANDROID_HOME=$ANDROID_HOME"
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
 
-          echo "Searching for sdkmanager..."
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
 
           SDKMANAGER=""
 
           if [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
             SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          elif [ -x "$ANDROID_HOME/cmdline-tools/bin/sdkmanager" ]; then
+            SDKMANAGER="$ANDROID_HOME/cmdline-tools/bin/sdkmanager"
+          elif [ -x "$ANDROID_HOME/tools/bin/sdkmanager" ]; then
+            SDKMANAGER="$ANDROID_HOME/tools/bin/sdkmanager"
+          elif command -v sdkmanager >/dev/null 2>&1; then
+            SDKMANAGER="$(command -v sdkmanager)"
           fi
 
           if [ -z "$SDKMANAGER" ]; then
-            FOUND="$(find "$ANDROID_HOME/cmdline-tools" \
-              -type f \
-              -name sdkmanager \
-              2>/dev/null | head -n 1 || true)"
-
-            if [ -n "$FOUND" ]; then
-              SDKMANAGER="$FOUND"
-            fi
-          fi
-
-          if [ -z "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager was not found."
+            echo "ERROR: Android sdkmanager could not be found."
             echo
-            echo "Android SDK directory:"
-            ls -la "$ANDROID_HOME" || true
-            echo
-            echo "Searching the runner:"
-            find /usr/local/lib/android \
-              -type f \
-              -name sdkmanager \
-              2>/dev/null | head -20 || true
+            echo "ANDROID_HOME contents:"
+            find "$ANDROID_HOME" -maxdepth 4 -type f -name sdkmanager -print || true
             exit 1
           fi
 
-          SDKMANAGER_DIR="$(dirname "$SDKMANAGER")"
-
-          echo "sdkmanager found at:"
+          echo "Using sdkmanager:"
           echo "$SDKMANAGER"
 
-          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
-          echo "$SDKMANAGER_DIR" >> "$GITHUB_PATH"
-          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
 
-          chmod +x "$SDKMANAGER"
+          "$SDKMANAGER" --version
 
-          yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses >/dev/null || true
 
-          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" \
+      # ============================================================
+      # 4. ACCEPT ANDROID LICENSES
+      # ============================================================
+
+      - name: Accept Android SDK licenses
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+
+
+      # ============================================================
+      # 5. INSTALL REQUIRED ANDROID SDK PACKAGES
+      # ============================================================
+
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          "$SDKMANAGER" \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0"
 
+
+      # ============================================================
+      # 6. VERIFY ANDROID SDK
+      # ============================================================
+
       - name: Verify Android SDK
         shell: bash
         run: |
-          set -e
+          set -euxo pipefail
 
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          echo "Android SDK:"
+          echo "$ANDROID_HOME"
 
-          echo
-          echo "sdkmanager:"
-          command -v sdkmanager
-          sdkmanager --version
+          test -d "$ANDROID_HOME"
 
           echo
           echo "Android platforms:"
@@ -112,26 +135,28 @@ jobs:
           echo "Android build tools:"
           ls -la "$ANDROID_HOME/build-tools"
 
-          echo
-          echo "Android platform 35:"
           test -d "$ANDROID_HOME/platforms/android-35"
-
-          echo
-          echo "Build tools 35.0.0:"
           test -d "$ANDROID_HOME/build-tools/35.0.0"
 
-          echo
-          echo "SDK verification successful."
+
+      # ============================================================
+      # 7. CREATE FARMERSMEET PROJECT FROM ZERO
+      # ============================================================
 
       - name: Create FarmersMeet Stage 9 project
         shell: bash
         run: |
-          set -e
+          set -euxo pipefail
 
           rm -rf FarmersMeet
 
           mkdir -p FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria
           mkdir -p FarmersMeet/app/src/main/res/values
+
+
+          # --------------------------------------------------------
+          # settings.gradle
+          # --------------------------------------------------------
 
           cat > FarmersMeet/settings.gradle <<'EOF'
           pluginManagement {
@@ -152,8 +177,14 @@ jobs:
           }
 
           rootProject.name = "FarmersMeetNigeria"
+
           include(":app")
           EOF
+
+
+          # --------------------------------------------------------
+          # Root build.gradle
+          # --------------------------------------------------------
 
           cat > FarmersMeet/build.gradle <<'EOF'
           plugins {
@@ -162,11 +193,21 @@ jobs:
           }
           EOF
 
+
+          # --------------------------------------------------------
+          # gradle.properties
+          # --------------------------------------------------------
+
           cat > FarmersMeet/gradle.properties <<'EOF'
           android.useAndroidX=true
           android.nonTransitiveRClass=true
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           EOF
+
+
+          # --------------------------------------------------------
+          # app/build.gradle
+          # --------------------------------------------------------
 
           cat > FarmersMeet/app/build.gradle <<'EOF'
           plugins {
@@ -214,6 +255,11 @@ jobs:
           }
           EOF
 
+
+          # --------------------------------------------------------
+          # AndroidManifest.xml
+          # --------------------------------------------------------
+
           cat > FarmersMeet/app/src/main/AndroidManifest.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
 
@@ -242,6 +288,11 @@ jobs:
           </manifest>
           EOF
 
+
+          # --------------------------------------------------------
+          # themes.xml
+          # --------------------------------------------------------
+
           cat > FarmersMeet/app/src/main/res/values/themes.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
 
@@ -261,6 +312,11 @@ jobs:
 
           </resources>
           EOF
+
+
+          # --------------------------------------------------------
+          # MainActivity.kt
+          # --------------------------------------------------------
 
           cat > FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt <<'EOF'
           package ng.farmersmeet.nigeria
@@ -1818,65 +1874,84 @@ jobs:
           }
           EOF
 
-      - name: Create Gradle wrapper
+
+      # ============================================================
+      # 8. VERIFY PROJECT STRUCTURE BEFORE GRADLE
+      # ============================================================
+
+      - name: Verify project structure
         shell: bash
         run: |
-          set -e
+          set -euxo pipefail
 
           cd FarmersMeet
+
+          test -f settings.gradle
+          test -f build.gradle
+          test -f gradle.properties
+          test -f app/build.gradle
+          test -f app/src/main/AndroidManifest.xml
+          test -f app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt
+          test -f app/src/main/res/values/themes.xml
+
+          echo
+          echo "Project files:"
+          find . -maxdepth 5 -type f | sort
+
+
+      # ============================================================
+      # 9. INSTALL EXACT GRADLE VERSION
+      # ============================================================
+
+      - name: Install Gradle 8.9
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          cd FarmersMeet
+
+          gradle --version
 
           gradle wrapper \
             --gradle-version 8.9 \
             --distribution-type bin
 
+          test -f gradlew
+          test -f gradle/wrapper/gradle-wrapper.properties
+
           chmod +x gradlew
-
-      - name: Verify Gradle project
-        shell: bash
-        run: |
-          set -e
-
-          cd FarmersMeet
 
           ./gradlew --version
 
-          ./gradlew \
-            --no-daemon \
-            tasks \
-            --stacktrace
 
-      - name: Build debug APK
+      # ============================================================
+      # 10. VERIFY APP MODULE AND ASSEMBLEDEBUG TASK
+      # ============================================================
+
+      - name: Verify Gradle Android app module
         shell: bash
         run: |
-          set -e
+          set -euxo pipefail
 
           cd FarmersMeet
 
-          ./gradlew \
-            --no-daemon \
-            --stacktrace \
-            :app:assembleDebug
+          echo
+          echo "Gradle projects:"
+          ./gradlew --no-daemon projects
 
-      - name: Verify APK
+          echo
+          echo "Available app tasks:"
+          ./gradlew --no-daemon :app:tasks --all
+
+          echo
+          echo "Checking assembleDebug task:"
+          ./gradlew --no-daemon :app:help --task assembleDebug
+
+
+      # ============================================================
+      # 11. BUILD DEBUG APK
+      # ============================================================
+
+      - name: Build Stage 9 debug APK
         shell: bash
         run: |
-          set -e
-
-          APK="FarmersMeet/app/build/outputs/apk/debug/app-debug.apk"
-
-          test -f "$APK"
-
-          echo
-          echo "========================================"
-          echo "BUILD SUCCESSFUL"
-          echo "========================================"
-          echo
-          ls -lh "$APK"
-          echo
-
-      - name: Upload Stage 9 APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: FarmersMeet-Stage-9-APK
-          path: FarmersMeet/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
