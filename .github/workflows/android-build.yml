@@ -15,22 +15,31 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
           cache: gradle
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.10'
+      - name: Install Android SDK
+        shell: bash
+        run: |
+          set -e
 
-      - name: Create FarmersMeet Stage 7 project
+          SDKMANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+
+          "$SDKMANAGER" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+      - name: Create clean FarmersMeet project
         shell: bash
         run: |
           set -e
@@ -39,7 +48,6 @@ jobs:
 
           mkdir -p FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria
           mkdir -p FarmersMeet/app/src/main/res/values
-          mkdir -p FarmersMeet/app/src/main/res/drawable
 
           cat > FarmersMeet/settings.gradle <<'EOF'
           pluginManagement {
@@ -66,16 +74,14 @@ jobs:
           cat > FarmersMeet/build.gradle <<'EOF'
           plugins {
               id 'com.android.application' version '8.7.3' apply false
-              id 'org.jetbrains.kotlin.android' version '2.0.21' apply false
+              id 'org.jetbrains.kotlin.android' version '1.9.24' apply false
           }
           EOF
 
           cat > FarmersMeet/gradle.properties <<'EOF'
-          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           android.useAndroidX=true
           android.nonTransitiveRClass=true
-          android.defaults.buildfeatures.buildconfig=true
-          kotlin.code.style=official
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           EOF
 
           cat > FarmersMeet/app/build.gradle <<'EOF'
@@ -86,7 +92,6 @@ jobs:
 
           android {
               namespace 'ng.farmersmeet.nigeria'
-
               compileSdk 35
 
               defaultConfig {
@@ -101,12 +106,10 @@ jobs:
                   debug {
                       debuggable true
                       minifyEnabled false
-                      shrinkResources false
                   }
 
                   release {
                       minifyEnabled false
-                      shrinkResources false
                   }
               }
 
@@ -118,18 +121,6 @@ jobs:
               kotlinOptions {
                   jvmTarget = "17"
               }
-
-              packaging {
-                  resources {
-                      excludes += [
-                          "META-INF/DEPENDENCIES",
-                          "META-INF/LICENSE",
-                          "META-INF/LICENSE.txt",
-                          "META-INF/NOTICE",
-                          "META-INF/NOTICE.txt"
-                      ]
-                  }
-              }
           }
 
           dependencies {
@@ -139,43 +130,6 @@ jobs:
           }
           EOF
 
-          cat > FarmersMeet/app/src/main/res/values/themes.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-
-              <style
-                  name="AppTheme"
-                  parent="Theme.AppCompat.Light.NoActionBar">
-
-                  <item name="android:fontFamily">sans</item>
-                  <item name="android:colorAccent">#176B35</item>
-                  <item name="android:statusBarColor">#0D4D25</item>
-                  <item name="android:navigationBarColor">#0D4D25</item>
-                  <item name="android:windowLightStatusBar">false</item>
-                  <item name="android:windowLightNavigationBar">false</item>
-                  <item name="android:windowNoTitle">true</item>
-
-              </style>
-
-          </resources>
-          EOF
-
-          cat > FarmersMeet/app/src/main/res/values/colors.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="farmersmeet_green">#176B35</color>
-              <color name="farmersmeet_dark_green">#0D4D25</color>
-              <color name="farmersmeet_yellow">#F4C430</color>
-          </resources>
-          EOF
-
-          cat > FarmersMeet/app/src/main/res/values/strings.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <string name="app_name">FarmersMeet</string>
-          </resources>
-          EOF
-
           cat > FarmersMeet/app/src/main/AndroidManifest.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
 
@@ -183,16 +137,14 @@ jobs:
 
               <application
                   android:allowBackup="true"
-                  android:label="@string/app_name"
+                  android:label="FarmersMeet"
                   android:supportsRtl="true"
-                  android:theme="@style/AppTheme"
-                  android:usesCleartextTraffic="true">
+                  android:theme="@style/AppTheme">
 
                   <activity
                       android:name=".MainActivity"
                       android:exported="true"
-                      android:screenOrientation="portrait"
-                      android:launchMode="singleTop">
+                      android:screenOrientation="portrait">
 
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -206,6 +158,26 @@ jobs:
           </manifest>
           EOF
 
+          cat > FarmersMeet/app/src/main/res/values/themes.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+
+          <resources>
+
+              <style
+                  name="AppTheme"
+                  parent="Theme.AppCompat.Light.NoActionBar">
+
+                  <item name="android:fontFamily">sans</item>
+                  <item name="android:colorAccent">#176B35</item>
+                  <item name="android:statusBarColor">#0D4D25</item>
+                  <item name="android:navigationBarColor">#0D4D25</item>
+                  <item name="android:windowLightStatusBar">false</item>
+
+              </style>
+
+          </resources>
+          EOF
+
           cat > FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt <<'EOF'
           package ng.farmersmeet.nigeria
 
@@ -215,7 +187,6 @@ jobs:
           import android.net.Uri
           import android.os.Bundle
           import android.view.Gravity
-          import android.view.View
           import android.widget.ArrayAdapter
           import android.widget.Button
           import android.widget.EditText
@@ -269,9 +240,7 @@ jobs:
                   registerForActivityResult(
                       ActivityResultContracts.OpenDocument()
                   ) { uri: Uri? ->
-
                       if (uri != null) {
-
                           try {
                               contentResolver.takePersistableUriPermission(
                                   uri,
@@ -284,7 +253,7 @@ jobs:
 
                           selectedPhotoView?.apply {
                               setImageURI(uri)
-                              visibility = View.VISIBLE
+                              visibility = ImageView.VISIBLE
                           }
                       }
                   }
@@ -292,433 +261,8 @@ jobs:
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
 
-                  try {
-                      seedListings()
-                      showHome()
-                  } catch (e: Exception) {
-                      showStartupError()
-                  }
-              }
-
-              private fun showStartupError() {
-
-                  val root = baseLayout()
-
-                  root.gravity = Gravity.CENTER
-
-                  val title = TextView(this).apply {
-                      text = "FarmersMeet"
-                      textSize = 32f
-                      setTextColor(green)
-                      gravity = Gravity.CENTER
-                  }
-
-                  val message = TextView(this).apply {
-                      text =
-                          "FarmersMeet could not start correctly.\n\nPlease restart the app."
-                      textSize = 17f
-                      setTextColor(textColor)
-                      gravity = Gravity.CENTER
-                      setPadding(20, 20, 20, 20)
-                  }
-
-                  root.addView(title)
-                  root.addView(message)
-
-                  setContentView(root)
-              }
-
-              private fun baseLayout(): LinearLayout {
-
-                  return LinearLayout(this).apply {
-                      orientation = LinearLayout.VERTICAL
-                      setBackgroundColor(backgroundColor)
-                      setPadding(20, 20, 20, 20)
-                  }
-              }
-
-              private fun heading(value: String): TextView {
-
-                  return TextView(this).apply {
-                      text = value
-                      textSize = 28f
-                      setTextColor(green)
-                      setTypeface(
-                          null,
-                          android.graphics.Typeface.BOLD
-                      )
-                      setPadding(0, 10, 0, 18)
-                  }
-              }
-
-              private fun makeButton(
-                  value: String,
-                  yellowButton: Boolean = false
-              ): Button {
-
-                  return Button(this).apply {
-
-                      text = value
-                      textSize = 15f
-
-                      setTypeface(
-                          null,
-                          android.graphics.Typeface.BOLD
-                      )
-
-                      setTextColor(
-                          if (yellowButton)
-                              textColor
-                          else
-                              Color.WHITE
-                      )
-
-                      setBackgroundColor(
-                          if (yellowButton)
-                              yellow
-                          else
-                              green
-                      )
-
-                      layoutParams =
-                          LinearLayout.LayoutParams(
-                              LinearLayout.LayoutParams.MATCH_PARENT,
-                              LinearLayout.LayoutParams.WRAP_CONTENT
-                          ).apply {
-                              setMargins(0, 6, 0, 6)
-                          }
-                  }
-              }
-
-              private fun showHome() {
-
-                  val root = baseLayout()
-
-                  root.gravity = Gravity.CENTER
-
-                  val logo = heading("FarmersMeet")
-
-                  logo.textSize = 40f
-                  logo.gravity = Gravity.CENTER
-
-                  val subtitle = TextView(this).apply {
-
-                      text =
-                          "Connecting farmers, buyers and agricultural businesses"
-
-                      textSize = 16f
-                      setTextColor(textColor)
-                      gravity = Gravity.CENTER
-                      setPadding(10, 0, 10, 25)
-                  }
-
-                  val enter =
-                      makeButton(
-                          "ENTER MARKETPLACE",
-                          true
-                      )
-
-                  enter.setOnClickListener {
-                      showMarketplace()
-                  }
-
-                  root.addView(logo)
-                  root.addView(subtitle)
-                  root.addView(enter)
-
-                  setContentView(root)
-              }
-
-              private fun showMarketplace() {
-
-                  val scroll = ScrollView(this)
-                  val root = baseLayout()
-
-                  root.addView(
-                      heading("FarmersMeet Marketplace")
-                  )
-
-                  val subtitle = TextView(this).apply {
-                      text =
-                          "Buy and sell agricultural products"
-                      textSize = 16f
-                      setTextColor(textColor)
-                      setPadding(0, 0, 0, 12)
-                  }
-
-                  root.addView(subtitle)
-
-                  val search = EditText(this).apply {
-                      hint = "Search pigs, fish, crops..."
-                      textSize = 16f
-                      setSingleLine(true)
-                      setTextColor(textColor)
-                  }
-
-                  root.addView(search)
-
-                  val searchButton =
-                      makeButton("SEARCH", true)
-
-                  searchButton.setOnClickListener {
-                      showSearchResults(
-                          search.text.toString().trim()
-                      )
-                  }
-
-                  root.addView(searchButton)
-
-                  val favorites =
-                      makeButton("❤️ MY FAVORITES")
-
-                  favorites.setOnClickListener {
-                      showFavorites()
-                  }
-
-                  root.addView(favorites)
-
-                  val myListings =
-                      makeButton("MY LISTINGS")
-
-                  myListings.setOnClickListener {
-                      showMyListings()
-                  }
-
-                  root.addView(myListings)
-
-                  val categoryTitle =
-                      TextView(this).apply {
-                          text = "Browse Categories"
-                          textSize = 21f
-                          setTextColor(green)
-                          setTypeface(
-                              null,
-                              android.graphics.Typeface.BOLD
-                          )
-                          setPadding(0, 15, 0, 8)
-                      }
-
-                  root.addView(categoryTitle)
-
-                  categories.forEach { category ->
-
-                      val button =
-                          makeButton(category)
-
-                      button.setOnClickListener {
-                          showListings(category)
-                      }
-
-                      root.addView(button)
-                  }
-
-                  val sell =
-                      makeButton(
-                          "SELL AN ITEM",
-                          true
-                      )
-
-                  sell.setOnClickListener {
-                      showSell()
-                  }
-
-                  root.addView(sell)
-
-                  scroll.addView(root)
-
-                  setContentView(scroll)
-              }
-
-              private fun showListings(
-                  category: String
-              ) {
-
-                  val results =
-                      getListings()
-                          .filter {
-                              it.category == category
-                          }
-                          .reversed()
-
-                  showListingPage(
-                      category,
-                      results
-                  )
-              }
-
-              private fun showSearchResults(
-                  query: String
-              ) {
-
-                  val lower = query.lowercase()
-
-                  val results =
-                      if (lower.isEmpty()) {
-
-                          getListings()
-
-                      } else {
-
-                          getListings().filter {
-
-                              it.name.lowercase()
-                                  .contains(lower) ||
-
-                              it.category.lowercase()
-                                  .contains(lower) ||
-
-                              it.location.lowercase()
-                                  .contains(lower) ||
-
-                              it.seller.lowercase()
-                                  .contains(lower)
-                          }
-                      }
-
-                  showListingPage(
-                      if (query.isEmpty())
-                          "All Listings"
-                      else
-                          "Search: $query",
-                      results.reversed()
-                  )
-              }
-
-              private fun showFavorites() {
-
-                  val favorites =
-                      getListings()
-                          .filter {
-                              isFavorite(it.id)
-                          }
-                          .reversed()
-
-                  showListingPage(
-                      "My Favorites",
-                      favorites
-                  )
-              }
-
-              private fun showMyListings() {
-
-                  val mine =
-                      getListings()
-                          .filter {
-                              it.isMine
-                          }
-                          .reversed()
-
-                  showListingPage(
-                      "My Listings",
-                      mine,
-                      true
-                  )
-              }
-
-              private fun showListingPage(
-                  pageTitle: String,
-                  results: List<Listing>,
-                  mineOnly: Boolean = false
-              ) {
-
-                  val scroll = ScrollView(this)
-                  val root = baseLayout()
-
-                  root.addView(
-                      heading(pageTitle)
-                  )
-
-                  if (results.isEmpty()) {
-
-                      val empty =
-                          TextView(this).apply {
-
-                              text =
-                                  if (mineOnly)
-                                      "You have not posted any listings yet."
-                                  else
-                                      "No listings found."
-
-                              textSize = 18f
-                              setTextColor(textColor)
-
-                              setPadding(
-                                  0,
-                                  20,
-                                  0,
-                                  30
-                              )
-                          }
-
-                    "Other Livestock",
-                  "Poultry",
-                  "Seeds and Seedlings",
-                  "Farm Equipment"
-              )
-
-              private var selectedPhotoUri: Uri? = null
-              private var selectedPhotoView: ImageView? = null
-
-              private val photoPicker =
-                  registerForActivityResult(
-                      ActivityResultContracts.OpenDocument()
-                  ) { uri ->
-
-                      if (uri != null) {
-
-                          try {
-                              contentResolver.takePersistableUriPermission(
-                                  uri,
-                                  Intent.FLAG_GRANT_READ_URI_PERMISSION
-                              )
-                          } catch (_: Exception) {
-                          }
-
-                          selectedPhotoUri = uri
-
-                          selectedPhotoView?.apply {
-                              setImageURI(uri)
-                              visibility = View.VISIBLE
-                          }
-                      }
-                  }
-
-              override fun onCreate(savedInstanceState: Bundle?) {
-                  super.onCreate(savedInstanceState)
-
-                  try {
-                      seedListings()
-                      showHome()
-                  } catch (e: Exception) {
-                      showStartupError(e)
-                  }
-              }
-
-              private fun showStartupError(error: Exception) {
-
-                  val root = baseLayout()
-
-                  root.gravity = Gravity.CENTER
-
-                  val title = TextView(this).apply {
-                      text = "FarmersMeet"
-                      textSize = 32f
-                      setTextColor(green)
-                      gravity = Gravity.CENTER
-                  }
-
-                  val message = TextView(this).apply {
-                      text = "FarmersMeet could not start correctly.\n\nPlease restart the app."
-                      textSize = 17f
-                      setTextColor(textColor)
-                      gravity = Gravity.CENTER
-                      setPadding(20, 20, 20, 20)
-                  }
-
-                  root.addView(title)
-                  root.addView(message)
-
-                  setContentView(root)
+                  seedListings()
+                  showHome()
               }
 
               private fun baseLayout(): LinearLayout {
@@ -743,12 +287,9 @@ jobs:
                   value: String,
                   yellowButton: Boolean = false
               ): Button {
-
                   return Button(this).apply {
-
                       text = value
                       textSize = 15f
-
                       setTypeface(
                           null,
                           android.graphics.Typeface.BOLD
@@ -773,13 +314,10 @@ jobs:
               }
 
               private fun showHome() {
-
                   val root = baseLayout()
-
                   root.gravity = Gravity.CENTER
 
                   val logo = heading("FarmersMeet")
-
                   logo.textSize = 40f
                   logo.gravity = Gravity.CENTER
 
@@ -793,10 +331,7 @@ jobs:
                   }
 
                   val enter =
-                      makeButton(
-                          "ENTER MARKETPLACE",
-                          true
-                      )
+                      makeButton("ENTER MARKETPLACE", true)
 
                   enter.setOnClickListener {
                       showMarketplace()
@@ -810,7 +345,6 @@ jobs:
               }
 
               private fun showMarketplace() {
-
                   val scroll = ScrollView(this)
                   val root = baseLayout()
 
@@ -832,7 +366,6 @@ jobs:
                       textSize = 16f
                       setSingleLine(true)
                       setTextColor(textColor)
-
                       layoutParams =
                           LinearLayout.LayoutParams(
                               LinearLayout.LayoutParams.MATCH_PARENT,
@@ -886,7 +419,6 @@ jobs:
                   root.addView(categoryTitle)
 
                   categories.forEach { category ->
-
                       val button = makeButton(category)
 
                       button.setOnClickListener {
@@ -897,10 +429,7 @@ jobs:
                   }
 
                   val sell =
-                      makeButton(
-                          "SELL AN ITEM",
-                          true
-                      )
+                      makeButton("SELL AN ITEM", true)
 
                   sell.setOnClickListener {
                       showSell()
@@ -909,24 +438,19 @@ jobs:
                   root.addView(sell)
 
                   scroll.addView(root)
-
                   setContentView(scroll)
               }
 
               private fun showListings(category: String) {
-
                   val results =
                       getListings()
-                          .filter {
-                              it.category == category
-                          }
+                          .filter { it.category == category }
                           .reversed()
 
                   showListingPage(category, results)
               }
 
               private fun showSearchResults(query: String) {
-
                   val lower = query.lowercase()
 
                   val results =
@@ -934,7 +458,6 @@ jobs:
                           getListings()
                       } else {
                           getListings().filter {
-
                               it.name.lowercase().contains(lower) ||
                               it.category.lowercase().contains(lower) ||
                               it.location.lowercase().contains(lower) ||
@@ -943,21 +466,16 @@ jobs:
                       }
 
                   showListingPage(
-                      if (query.isEmpty())
-                          "All Listings"
-                      else
-                          "Search: $query",
+                      if (query.isEmpty()) "All Listings"
+                      else "Search: $query",
                       results.reversed()
                   )
               }
 
               private fun showFavorites() {
-
                   val favorites =
                       getListings()
-                          .filter {
-                              isFavorite(it.id)
-                          }
+                          .filter { isFavorite(it.id) }
                           .reversed()
 
                   showListingPage(
@@ -967,12 +485,9 @@ jobs:
               }
 
               private fun showMyListings() {
-
                   val mine =
                       getListings()
-                          .filter {
-                              it.isMine
-                          }
+                          .filter { it.isMine }
                           .reversed()
 
                   showListingPage(
@@ -987,33 +502,26 @@ jobs:
                   results: List<Listing>,
                   mineOnly: Boolean = false
               ) {
-
                   val scroll = ScrollView(this)
                   val root = baseLayout()
 
-                  root.addView(
-                      heading(pageTitle)
-                  )
+                  root.addView(heading(pageTitle))
 
                   if (results.isEmpty()) {
+                      val empty = TextView(this).apply {
+                          text =
+                              if (mineOnly)
+                                  "You have not posted any listings yet."
+                              else
+                                  "No listings found."
 
-                      val empty =
-                          TextView(this).apply {
-                              text =
-                                  if (mineOnly)
-                                      "You have not posted any listings yet."
-                                  else
-                                      "No listings found."
-
-                              textSize = 18f
-                              setTextColor(textColor)
-                              setPadding(0, 20, 0, 30)
-                          }
+                          textSize = 18f
+                          setTextColor(textColor)
+                          setPadding(0, 20, 0, 30)
+                      }
 
                       root.addView(empty)
-
                   } else {
-
                       results.forEach { listing ->
                           addListingCard(
                               root,
@@ -1024,10 +532,7 @@ jobs:
                   }
 
                   val sell =
-                      makeButton(
-                          "SELL AN ITEM",
-                          true
-                      )
+                      makeButton("SELL AN ITEM", true)
 
                   sell.setOnClickListener {
                       showSell()
@@ -1036,9 +541,7 @@ jobs:
                   root.addView(sell)
 
                   val back =
-                      makeButton(
-                          "BACK TO MARKETPLACE"
-                      )
+                      makeButton("BACK TO MARKETPLACE")
 
                   back.setOnClickListener {
                       showMarketplace()
@@ -1047,7 +550,6 @@ jobs:
                   root.addView(back)
 
                   scroll.addView(root)
-
                   setContentView(scroll)
               }
 
@@ -1056,10 +558,8 @@ jobs:
                   listing: Listing,
                   mineOnly: Boolean
               ) {
-
                   val card =
                       LinearLayout(this).apply {
-
                           orientation =
                               LinearLayout.VERTICAL
 
@@ -1077,14 +577,17 @@ jobs:
                                   LinearLayout.LayoutParams.MATCH_PARENT,
                                   LinearLayout.LayoutParams.WRAP_CONTENT
                               ).apply {
-                                  setMargins(0, 0, 0, 14)
+                                  setMargins(
+                                      0,
+                                      0,
+                                      0,
+                                      14
+                                  )
                               }
                       }
 
                   if (listing.photoUri.isNotEmpty()) {
-
                       try {
-
                           val image = ImageView(this)
 
                           image.layoutParams =
@@ -1101,7 +604,6 @@ jobs:
                           )
 
                           card.addView(image)
-
                       } catch (_: Exception) {
                       }
                   }
@@ -1156,7 +658,6 @@ jobs:
                       )
 
                   favorite.setOnClickListener {
-
                       toggleFavorite(listing.id)
 
                       favorite.text =
@@ -1187,12 +688,10 @@ jobs:
                   card.addView(view)
 
                   if (mineOnly && listing.isMine) {
-
                       val delete =
                           makeButton("DELETE LISTING")
 
                       delete.setOnClickListener {
-
                           deleteListing(listing.id)
 
                           Toast.makeText(
@@ -1210,19 +709,16 @@ jobs:
                   root.addView(card)
               }
 
-              private fun showDetails(listing: Listing) {
-
+              private fun showDetails(
+                  listing: Listing
+              ) {
                   val scroll = ScrollView(this)
                   val root = baseLayout()
 
-                  root.addView(
-                      heading(listing.name)
-                  )
+                  root.addView(heading(listing.name))
 
                   if (listing.photoUri.isNotEmpty()) {
-
                       try {
-
                           val image = ImageView(this)
 
                           image.layoutParams =
@@ -1239,14 +735,12 @@ jobs:
                           )
 
                           root.addView(image)
-
                       } catch (_: Exception) {
                       }
                   }
 
                   val details =
                       TextView(this).apply {
-
                           text =
                               "PRICE\n${listing.price}\n\n" +
                               "CATEGORY\n${listing.category}\n\n" +
@@ -1276,7 +770,6 @@ jobs:
                       )
 
                   favorite.setOnClickListener {
-
                       toggleFavorite(listing.id)
 
                       favorite.text =
@@ -1289,23 +782,16 @@ jobs:
                   root.addView(favorite)
 
                   val call =
-                      makeButton(
-                          "CALL SELLER",
-                          true
-                      )
+                      makeButton("CALL SELLER", true)
 
                   call.setOnClickListener {
-
                       if (listing.phone.isEmpty()) {
-
                           Toast.makeText(
                               this,
                               "No phone number provided.",
                               Toast.LENGTH_SHORT
                           ).show()
-
                       } else {
-
                           startActivity(
                               Intent(
                                   Intent.ACTION_DIAL,
@@ -1323,17 +809,13 @@ jobs:
                       makeButton("WHATSAPP SELLER")
 
                   whatsapp.setOnClickListener {
-
                       if (listing.phone.isEmpty()) {
-
                           Toast.makeText(
                               this,
                               "No phone number provided.",
                               Toast.LENGTH_SHORT
                           ).show()
-
                       } else {
-
                           val clean =
                               listing.phone
                                   .replace("+", "")
@@ -1360,12 +842,10 @@ jobs:
                   root.addView(whatsapp)
 
                   if (listing.isMine) {
-
                       val delete =
                           makeButton("DELETE LISTING")
 
                       delete.setOnClickListener {
-
                           deleteListing(listing.id)
 
                           Toast.makeText(
@@ -1390,10 +870,7 @@ jobs:
                   root.addView(back)
 
                   val market =
-                      makeButton(
-                          "MARKETPLACE",
-                          true
-                      )
+                      makeButton("MARKETPLACE", true)
 
                   market.setOnClickListener {
                       showMarketplace()
@@ -1402,23 +879,20 @@ jobs:
                   root.addView(market)
 
                   scroll.addView(root)
-
                   setContentView(scroll)
               }
 
               private fun showSell() {
-
                   selectedPhotoUri = null
                   selectedPhotoView = null
 
                   val scroll = ScrollView(this)
                   val root = baseLayout()
 
-                  root.addView(
-                      heading("Sell an Item")
-                  )
+                  root.addView(heading("Sell an Item"))
 
-                  val category = Spinner(this)
+                  val category =
+                      Spinner(this)
 
                   category.adapter =
                       ArrayAdapter(
@@ -1455,20 +929,19 @@ jobs:
                       ImageView.ScaleType.CENTER_CROP
 
                   photo.setBackgroundColor(Color.LTGRAY)
-                  photo.visibility = View.GONE
+
+                  photo.visibility = ImageView.GONE
 
                   selectedPhotoView = photo
-
                   root.addView(photo)
 
                   val choosePhoto =
-                      makeButton(
-                          "CHOOSE PHOTO",
-                          true
-                      )
+                      makeButton("CHOOSE PHOTO", true)
 
                   choosePhoto.setOnClickListener {
-                      photoPicker.launch(arrayOf("image/*"))
+                      photoPicker.launch(
+                          arrayOf("image/*")
+                      )
                   }
 
                   root.addView(choosePhoto)
@@ -1493,13 +966,9 @@ jobs:
                   root.addView(description)
 
                   val post =
-                      makeButton(
-                          "POST LISTING",
-                          true
-                      )
+                      makeButton("POST LISTING", true)
 
                   post.setOnClickListener {
-
                       if (
                           name.text.toString().trim().isEmpty() ||
                           price.text.toString().trim().isEmpty() ||
@@ -1508,7 +977,6 @@ jobs:
                           seller.text.toString().trim().isEmpty() ||
                           phone.text.toString().trim().isEmpty()
                       ) {
-
                           Toast.makeText(
                               this,
                               "Please complete the required fields.",
@@ -1523,7 +991,8 @@ jobs:
                               System.currentTimeMillis(),
                               name.text.toString().trim(),
                               category.selectedItem.toString(),
-                              "₦" + price.text.toString().trim(),
+                              "₦" +
+                                  price.text.toString().trim(),
                               quantity.text.toString().trim(),
                               location.text.toString().trim(),
                               seller.text.toString().trim(),
@@ -1556,16 +1025,13 @@ jobs:
                   root.addView(back)
 
                   scroll.addView(root)
-
                   setContentView(scroll)
               }
 
               private fun field(
                   hintValue: String
               ): EditText {
-
                   return EditText(this).apply {
-
                       hint = hintValue
                       textSize = 16f
                       setTextColor(textColor)
@@ -1580,8 +1046,9 @@ jobs:
                   }
               }
 
-              private fun saveListing(listing: Listing) {
-
+              private fun saveListing(
+                  listing: Listing
+              ) {
                   val prefs =
                       getSharedPreferences(
                           "farmersmeet",
@@ -1621,7 +1088,6 @@ jobs:
               }
 
               private fun getListings(): List<Listing> {
-
                   val prefs =
                       getSharedPreferences(
                           "farmersmeet",
@@ -1636,16 +1102,19 @@ jobs:
                           ) ?: "[]"
                       )
 
-                  val result = mutableListOf<Listing>()
+                  val result =
+                      mutableListOf<Listing>()
 
                   for (i in 0 until array.length()) {
-
                       val item =
                           array.getJSONObject(i)
 
                       result.add(
                           Listing(
-                              item.optLong("id", i.toLong()),
+                              item.optLong(
+                                  "id",
+                                  i.toLong()
+                              ),
                               item.optString("name"),
                               item.optString("category"),
                               item.optString("price"),
@@ -1655,7 +1124,10 @@ jobs:
                               item.optString("phone"),
                               item.optString("description"),
                               item.optString("photoUri"),
-                              item.optBoolean("isMine", false)
+                              item.optBoolean(
+                                  "isMine",
+                                  false
+                              )
                           )
                       )
                   }
@@ -1663,8 +1135,9 @@ jobs:
                   return result
               }
 
-              private fun isFavorite(id: Long): Boolean {
-
+              private fun isFavorite(
+                  id: Long
+              ): Boolean {
                   val prefs =
                       getSharedPreferences(
                           "farmersmeet",
@@ -1677,11 +1150,14 @@ jobs:
                           emptySet()
                       ) ?: emptySet()
 
-                  return favorites.contains(id.toString())
+                  return favorites.contains(
+                      id.toString()
+                  )
               }
 
-              private fun toggleFavorite(id: Long) {
-
+              private fun toggleFavorite(
+                  id: Long
+              ) {
                   val prefs =
                       getSharedPreferences(
                           "farmersmeet",
@@ -1711,8 +1187,9 @@ jobs:
                       .apply()
               }
 
-              private fun deleteListing(id: Long) {
-
+              private fun deleteListing(
+                  id: Long
+              ) {
                   val prefs =
                       getSharedPreferences(
                           "farmersmeet",
@@ -1730,7 +1207,6 @@ jobs:
                   val newArray = JSONArray()
 
                   for (i in 0 until array.length()) {
-
                       val item =
                           array.getJSONObject(i)
 
@@ -1761,7 +1237,6 @@ jobs:
               }
 
               private fun seedListings() {
-
                   val prefs =
                       getSharedPreferences(
                           "farmersmeet",
@@ -1779,7 +1254,6 @@ jobs:
 
                   val samples =
                       listOf(
-
                           Listing(
                               1001L,
                               "Healthy Large Pig",
@@ -1921,23 +1395,41 @@ jobs:
           }
           EOF
 
+      - name: Verify source files
+        shell: bash
+        run: |
+          set -e
+
+          test -f FarmersMeet/settings.gradle
+          test -f FarmersMeet/build.gradle
+          test -f FarmersMeet/app/build.gradle
+          test -f FarmersMeet/app/src/main/AndroidManifest.xml
+          test -f FarmersMeet/app/src/main/res/values/themes.xml
+          test -f FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt
+
+          echo "All FarmersMeet Stage 7 source files are present."
+
       - name: Generate Gradle wrapper
         working-directory: FarmersMeet
         shell: bash
         run: |
-          gradle wrapper --gradle-version 8.10 --distribution-type bin
+          set -e
+          gradle wrapper --gradle-version 8.10.2 --distribution-type bin
 
-      - name: Clean build
+      - name: Check Gradle environment
         working-directory: FarmersMeet
         shell: bash
         run: |
-          ./gradlew clean
+          set -e
+          ./gradlew --version
+          ./gradlew :app:tasks --all >/dev/null
 
-      - name: Build debug APK
+      - name: Build FarmersMeet Stage 7 APK
         working-directory: FarmersMeet
         shell: bash
         run: |
-          ./gradlew :app:assembleDebug --stacktrace --no-daemon
+          set -e
+          ./gradlew clean :app:assembleDebug --stacktrace --no-daemon
 
       - name: Verify APK exists
         shell: bash
@@ -1947,39 +1439,40 @@ jobs:
           APK="FarmersMeet/app/build/outputs/apk/debug/app-debug.apk"
 
           test -f "$APK"
+          test -s "$APK"
 
-          echo "APK successfully created:"
+          echo "APK created:"
           ls -lh "$APK"
 
-      - name: Verify APK package
+      - name: Verify APK package and launcher
         shell: bash
         run: |
           set -e
 
-          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          APK="FarmersMeet/app/build/outputs/apk/debug/app-debug.apk"
+          AAPT="${ANDROID_SDK_ROOT}/build-tools/35.0.0/aapt"
 
           test -x "$AAPT"
 
           echo "APK package information:"
-          "$AAPT" dump badging \
-            FarmersMeet/app/build/outputs/apk/debug/app-debug.apk \
-            | head -30
+          "$AAPT" dump badging "$APK" | head -20
 
-      - name: Verify launcher activity
-        shell: bash
-        run: |
-          set -e
+          echo
+          echo "Checking application ID..."
 
-          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          "$AAPT" dump badging "$APK" | grep -q \
+            "package: name='ng.farmersmeet.nigeria'"
 
-          "$AAPT" dump badging \
-            FarmersMeet/app/build/outputs/apk/debug/app-debug.apk \
-            | grep -E \
-            "package: name='ng.farmersmeet.nigeria'|launchable-activity: name='ng.farmersmeet.nigeria.MainActivity'"
+          echo
+          echo "Checking launcher activity..."
 
-          echo "Launcher activity verified."
+          "$AAPT" dump badging "$APK" | grep -q \
+            "launchable-activity"
 
-      - name: Upload FarmersMeet APK
+          echo
+          echo "Launcher APK verification PASSED."
+
+      - name: Upload FarmersMeet Stage 7 APK
         uses: actions/upload-artifact@v4
         with:
           name: FarmersMeet-Stage7-APK
