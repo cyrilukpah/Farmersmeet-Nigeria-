@@ -3,7 +3,8 @@ name: FarmersMeet Stage 10 APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -11,25 +12,25 @@ permissions:
 jobs:
   build:
     name: Build FarmersMeet Stage 10
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
 
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Gradle
+      - name: Set up Gradle 8.10
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10'
 
-      - name: Prepare FarmersMeet project
+      - name: Prepare FarmersMeet source
         shell: bash
         run: |
           set -euo pipefail
@@ -39,81 +40,85 @@ jobs:
           mkdir -p FarmersMeet
 
           if [ -f "FarmersMeet_Nigeria_V2_Full_Source.zip" ]; then
-
             unzip -q "FarmersMeet_Nigeria_V2_Full_Source.zip" \
               -d FarmersMeet/extracted
 
             if [ -d "FarmersMeet/extracted/FarmersMeet_V2/android" ]; then
-              cp -a FarmersMeet/extracted/FarmersMeet_V2/android/. \
+              cp -a \
+                FarmersMeet/extracted/FarmersMeet_V2/android/. \
                 FarmersMeet/
 
             elif [ -d "FarmersMeet/extracted/android" ]; then
-              cp -a FarmersMeet/extracted/android/. \
+              cp -a \
+                FarmersMeet/extracted/android/. \
                 FarmersMeet/
 
             else
-              echo "ERROR: Android project was not found in source archive."
-              echo
-              echo "Archive contents:"
-              find FarmersMeet/extracted -maxdepth 4 -type f | sort
+              echo "ERROR: Android project was not found inside the source archive."
+              find FarmersMeet/extracted -maxdepth 5 -type f | sort
               exit 1
             fi
 
-          elif [ -f "FarmersMeet/settings.gradle" ]; then
+          elif [ -f "settings.gradle" ] && [ -d "app" ]; then
+            echo "Android project already exists at repository root."
 
-            echo "Existing FarmersMeet project found."
+            cp -a . FarmersMeet
 
           else
-
-            echo "ERROR: FarmersMeet source was not found."
+            echo "ERROR: FarmersMeet Android source was not found."
+            find . -maxdepth 4 -type f | sort
             exit 1
-
           fi
 
           test -f FarmersMeet/settings.gradle
           test -f FarmersMeet/build.gradle
           test -f FarmersMeet/app/build.gradle
           test -f FarmersMeet/app/src/main/AndroidManifest.xml
-          test -f FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt
 
-          echo "FarmersMeet project verified."
+          echo "FarmersMeet Android source verified."
 
       - name: Install Firebase configuration
         shell: bash
         run: |
           set -euo pipefail
 
-          if [ -f "Settings/google-services.json" ]; then
+          mkdir -p FarmersMeet/app
 
-            cp "Settings/google-services.json" \
+          if [ -f "Settings/google-services.json" ]; then
+            cp \
+              Settings/google-services.json \
               FarmersMeet/app/google-services.json
 
           elif [ -f "google-services.json" ]; then
-
-            cp "google-services.json" \
+            cp \
+              google-services.json \
               FarmersMeet/app/google-services.json
 
           elif [ -f "FarmersMeet/app/google-services.json" ]; then
-
             echo "Firebase configuration already exists."
 
           else
-
             echo "ERROR: google-services.json was not found."
             exit 1
-
           fi
 
           test -s FarmersMeet/app/google-services.json
 
           echo "Firebase configuration installed."
 
-      - name: Configure Firebase Gradle plugin
+      - name: Configure AndroidX and Gradle
         shell: bash
         run: |
           set -euo pipefail
 
-          cat > FarmersMeet/settings.gradle <<'GRADLE'
+          cat > FarmersMeet/gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          android.enableJetifier=true
+          kotlin.code.style=official
+          EOF
+
+          cat > FarmersMeet/settings.gradle <<'EOF'
           pluginManagement {
               repositories {
                   google()
@@ -131,18 +136,25 @@ jobs:
               }
           }
 
-          rootProject.name = 'FarmersMeet'
+          rootProject.name = "FarmersMeet"
 
-          include ':app'
-          GRADLE
+          include(":app")
+          EOF
 
-          cat > FarmersMeet/build.gradle <<'GRADLE'
+          cat > FarmersMeet/build.gradle <<'EOF'
           plugins {
               id 'com.android.application' version '8.7.3' apply false
               id 'org.jetbrains.kotlin.android' version '2.0.21' apply false
               id 'com.google.gms.google-services' version '4.4.2' apply false
           }
-          GRADLE
+          EOF
+
+          echo "AndroidX and Gradle configuration created."
+
+      - name: Configure Firebase Gradle plugin
+        shell: bash
+        run: |
+          set -euo pipefail
 
           python3 - <<'PY'
           from pathlib import Path
@@ -151,7 +163,6 @@ jobs:
           text = path.read_text()
 
           if "com.google.gms.google-services" not in text:
-
               marker = "id 'org.jetbrains.kotlin.android'"
 
               if marker in text:
@@ -173,55 +184,12 @@ jobs:
           path.write_text(text)
           PY
 
-          echo "Firebase Gradle plugin configured."
+          echo "Google Services plugin configured."
 
-      - name: Configure Firebase dependencies
+      - name: Verify Firebase package
         shell: bash
         run: |
           set -euo pipefail
-
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path("FarmersMeet/app/build.gradle")
-          text = path.read_text()
-
-          if "com.google.firebase:firebase-bom" not in text:
-
-              text += """
-
-          dependencies {
-              implementation platform('com.google.firebase:firebase-bom:34.3.0')
-              implementation 'com.google.firebase:firebase-auth'
-              implementation 'com.google.firebase:firebase-firestore'
-              implementation 'com.google.firebase:firebase-storage'
-          }
-          """
-
-          path.write_text(text)
-          PY
-
-          echo "Firebase dependencies configured."
-
-      - name: Verify Firebase configuration
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          grep -q "com.google.gms.google-services" \
-            FarmersMeet/build.gradle
-
-          grep -q "com.google.gms.google-services" \
-            FarmersMeet/app/build.gradle
-
-          grep -q "firebase-auth" \
-            FarmersMeet/app/build.gradle
-
-          grep -q "firebase-firestore" \
-            FarmersMeet/app/build.gradle
-
-          grep -q "firebase-storage" \
-            FarmersMeet/app/build.gradle
 
           python3 - <<'PY'
           import json
@@ -232,8 +200,7 @@ jobs:
               data = json.load(f)
 
           expected = "ng.farmersmeet.nigeria"
-
-          found = []
+          packages = []
 
           for client in data.get("client", []):
               package_name = (
@@ -244,20 +211,33 @@ jobs:
               )
 
               if package_name:
-                  found.append(package_name)
+                  packages.append(package_name)
 
-          print("Firebase packages:", found)
+          print("Firebase Android package(s):")
+          for package_name in packages:
+              print(" -", package_name)
 
-          if expected not in found:
+          if expected not in packages:
               raise SystemExit(
-                  f"ERROR: Firebase package mismatch. "
-                  f"Expected {expected}, found {found}"
+                  "ERROR: Firebase package mismatch. "
+                  f"Expected {expected}; found {packages}"
               )
 
-          print("Firebase configuration verified.")
+          print("Firebase package verification PASSED.")
           PY
 
-      - name: Build Stage 10 APK
+      - name: Verify AndroidX is enabled
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test "$(grep -c '^android.useAndroidX=true$' FarmersMeet/gradle.properties)" -eq 1
+          test "$(grep -c '^android.enableJetifier=true$' FarmersMeet/gradle.properties)" -eq 1
+
+          echo "AndroidX is ENABLED."
+          echo "Jetifier is ENABLED."
+
+      - name: Build Stage 10 debug APK
         working-directory: FarmersMeet
         shell: bash
         run: |
@@ -265,26 +245,29 @@ jobs:
 
           gradle :app:assembleDebug --stacktrace
 
-      - name: Verify APK
+      - name: Verify Stage 10 APK
         shell: bash
         run: |
           set -euo pipefail
 
           APK="FarmersMeet/app/build/outputs/apk/debug/app-debug.apk"
 
-          test -s "$APK"
+          if [ ! -s "$APK" ]; then
+            echo "ERROR: Stage 10 APK was not generated."
+            exit 1
+          fi
 
           echo
           echo "=========================================="
-          echo " FARMERSMEET STAGE 10 APK CREATED"
+          echo " FARMERSMEET STAGE 10 APK SUCCESSFULLY BUILT"
           echo "=========================================="
           echo
 
           ls -lh "$APK"
 
-      - name: Upload APK
+      - name: Upload Stage 10 APK
         uses: actions/upload-artifact@v4
         with:
-          name: FarmersMeet-Stage10-APK
+          name: FarmersMeet-Stage-10-APK
           path: FarmersMeet/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
