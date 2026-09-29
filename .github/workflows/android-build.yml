@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  actions: read
 
 jobs:
   build:
@@ -16,69 +15,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
-      # ------------------------------------------------------------
-      # 1. CHECKOUT
-      # ------------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ------------------------------------------------------------
-      # 2. JAVA 17
-      # ------------------------------------------------------------
-      - name: Set up JDK 17
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
 
-      # ------------------------------------------------------------
-      # 3. GRADLE 8.9
-      # AGP 8.7.x requires Gradle 8.9+
-      # ------------------------------------------------------------
-      - name: Set up Gradle 8.9
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
-      # ------------------------------------------------------------
-      # 4. ANDROID SDK
-      # Do NOT use android-actions/setup-android.
-      # It previously failed while looking for the old "tools"
-      # package.
-      # ------------------------------------------------------------
-      - name: Configure Android SDK
+      - name: Install Android SDK packages
         shell: bash
         run: |
-          echo "ANDROID_HOME=${ANDROID_SDK_ROOT}" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}" >> "$GITHUB_ENV"
-          echo "${ANDROID_SDK_ROOT}/platform-tools" >> "$GITHUB_PATH"
-          echo "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          echo "${ANDROID_SDK_ROOT}/build-tools/35.0.0" >> "$GITHUB_PATH"
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Install required Android SDK packages
-        shell: bash
-        run: |
-          set -e
-
-          SDKMANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
-
-          if [ ! -x "$SDKMANAGER" ]; then
-            echo "sdkmanager not found at:"
-            echo "$SDKMANAGER"
-            exit 1
-          fi
-
-          yes | "$SDKMANAGER" --licenses >/dev/null || true
-
-          "$SDKMANAGER" \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
-
-      # ------------------------------------------------------------
-      # 5. CREATE CLEAN STAGE 7 PROJECT
-      # ------------------------------------------------------------
       - name: Create clean FarmersMeet Stage 7 project
         shell: bash
         run: |
@@ -95,9 +50,6 @@ jobs:
           mkdir -p FarmersMeet/app/src/main/res/mipmap-xxhdpi
           mkdir -p FarmersMeet/app/src/main/res/mipmap-xxxhdpi
 
-          # --------------------------------------------------------
-          # SETTINGS
-          # --------------------------------------------------------
           cat > FarmersMeet/settings.gradle <<'EOF'
           pluginManagement {
               repositories {
@@ -121,9 +73,6 @@ jobs:
           include(":app")
           EOF
 
-          # --------------------------------------------------------
-          # ROOT BUILD
-          # --------------------------------------------------------
           cat > FarmersMeet/build.gradle <<'EOF'
           plugins {
               id 'com.android.application' version '8.7.3' apply false
@@ -131,18 +80,14 @@ jobs:
           }
           EOF
 
-          # --------------------------------------------------------
-          # GRADLE PROPERTIES
-          # --------------------------------------------------------
           cat > FarmersMeet/gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           android.useAndroidX=true
           android.nonTransitiveRClass=true
-          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.defaults.buildfeatures.buildconfig=true
+          kotlin.code.style=official
           EOF
 
-          # --------------------------------------------------------
-          # APP BUILD
-          # --------------------------------------------------------
           cat > FarmersMeet/app/build.gradle <<'EOF'
           plugins {
               id 'com.android.application'
@@ -159,8 +104,8 @@ jobs:
                   minSdk 24
                   targetSdk 35
 
-                  versionCode 8
-                  versionName "8.0"
+                  versionCode 7
+                  versionName "7.0"
 
                   testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
               }
@@ -169,10 +114,10 @@ jobs:
                   debug {
                       debuggable true
                       minifyEnabled false
+                      shrinkResources false
                   }
 
                   release {
-                      debuggable false
                       minifyEnabled false
                       shrinkResources false
                   }
@@ -207,9 +152,44 @@ jobs:
           }
           EOF
 
-          # --------------------------------------------------------
-          # ANDROID MANIFEST
-          # --------------------------------------------------------
+          cat > FarmersMeet/app/src/main/res/values/themes.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+
+              <style
+                  name="AppTheme"
+                  parent="Theme.AppCompat.Light.NoActionBar">
+
+                  <item name="android:fontFamily">sans</item>
+                  <item name="android:windowActionModeOverlay">true</item>
+                  <item name="android:colorAccent">#176B35</item>
+                  <item name="android:statusBarColor">#0D4D25</item>
+                  <item name="android:navigationBarColor">#0D4D25</item>
+                  <item name="android:windowLightStatusBar">false</item>
+                  <item name="android:windowLightNavigationBar">false</item>
+                  <item name="android:windowNoTitle">true</item>
+
+              </style>
+
+          </resources>
+          EOF
+
+          cat > FarmersMeet/app/src/main/res/values/colors.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="farmersmeet_green">#176B35</color>
+              <color name="farmersmeet_dark_green">#0D4D25</color>
+              <color name="farmersmeet_yellow">#F4C430</color>
+          </resources>
+          EOF
+
+          cat > FarmersMeet/app/src/main/res/values/strings.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">FarmersMeet</string>
+          </resources>
+          EOF
+
           cat > FarmersMeet/app/src/main/AndroidManifest.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
 
@@ -217,26 +197,22 @@ jobs:
 
               <application
                   android:allowBackup="true"
-                  android:icon="@drawable/farmersmeet_launcher"
-                  android:label="FarmersMeet"
-                  android:roundIcon="@drawable/farmersmeet_launcher"
+                  android:icon="@drawable/ic_launcher"
+                  android:label="@string/app_name"
+                  android:roundIcon="@drawable/ic_launcher"
                   android:supportsRtl="true"
                   android:theme="@style/AppTheme"
-                  android:usesCleartextTraffic="false">
+                  android:usesCleartextTraffic="true">
 
                   <activity
                       android:name=".MainActivity"
                       android:exported="true"
-                      android:screenOrientation="portrait">
+                      android:screenOrientation="portrait"
+                      android:launchMode="singleTop">
 
                       <intent-filter>
-
-                          <action
-                              android:name="android.intent.action.MAIN" />
-
-                          <category
-                              android:name="android.intent.category.LAUNCHER" />
-
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
 
                   </activity>
@@ -246,53 +222,9 @@ jobs:
           </manifest>
           EOF
 
-          # --------------------------------------------------------
-          # THEME
-          # --------------------------------------------------------
-          cat > FarmersMeet/app/src/main/res/values/themes.xml <<'EOF'
+          cat > FarmersMeet/app/src/main/res/drawable/ic_launcher.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
-
-          <resources>
-
-              <style
-                  name="AppTheme"
-                  parent="Theme.AppCompat.Light.NoActionBar">
-
-                  <item name="android:fontFamily">sans</item>
-
-                  <item name="android:colorAccent">
-                      #176B35
-                  </item>
-
-                  <item name="android:statusBarColor">
-                      #0D4D25
-                  </item>
-
-                  <item name="android:navigationBarColor">
-                      #0D4D25
-                  </item>
-
-                  <item name="android:windowLightStatusBar">
-                      false
-                  </item>
-
-                  <item name="android:windowActionModeOverlay">
-                      true
-                  </item>
-
-              </style>
-
-          </resources>
-          EOF
-
-          # --------------------------------------------------------
-          # SIMPLE BUILT-IN LAUNCHER ICON
-          # --------------------------------------------------------
-          cat > FarmersMeet/app/src/main/res/drawable/farmersmeet_launcher.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-
-          <vector
-              xmlns:android="http://schemas.android.com/apk/res/android"
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
               android:width="108dp"
               android:height="108dp"
               android:viewportWidth="108"
@@ -304,9 +236,392 @@ jobs:
 
               <path
                   android:fillColor="#F4C430"
-                  android:pathData="M54,18C34,18 18,34 18,54s16,36 36,36 36,-16 36,-36S74,18 54,18z" />
+                  android:pathData="M54,18
+                  C38,18 25,31 25,47
+                  C25,66 40,82 54,92
+                  C68,82 83,66 83,47
+                  C83,31 70,18 54,18z" />
 
               <path
+                  android:fillColor="#176B35"
+                  android:pathData="M54,31
+                  C45,31 38,38 38,47
+                  C38,56 45,63 54,63
+                  C63,63 70,56 70,47
+                  C70,38 63,31 54,31z" />
+
+          </vector>
+          EOF
+
+          cat > FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt <<'EOF'
+          package ng.farmersmeet.nigeria
+
+          import android.content.Context
+          import android.content.Intent
+          import android.graphics.Color
+          import android.net.Uri
+          import android.os.Bundle
+          import android.view.Gravity
+          import android.view.View
+          import android.widget.ArrayAdapter
+          import android.widget.Button
+          import android.widget.EditText
+          import android.widget.ImageView
+          import android.widget.LinearLayout
+          import android.widget.ScrollView
+          import android.widget.Spinner
+          import android.widget.TextView
+          import android.widget.Toast
+          import androidx.activity.result.contract.ActivityResultContracts
+          import androidx.appcompat.app.AppCompatActivity
+          import org.json.JSONArray
+          import org.json.JSONObject
+
+          data class Listing(
+              val id: Long,
+              val name: String,
+              val category: String,
+              val price: String,
+              val quantity: String,
+              val location: String,
+              val seller: String,
+              val phone: String,
+              val description: String,
+              val photoUri: String,
+              val isMine: Boolean
+          )
+
+          class MainActivity : AppCompatActivity() {
+
+              private val green = Color.rgb(23, 107, 53)
+              private val darkGreen = Color.rgb(13, 77, 37)
+              private val yellow = Color.rgb(244, 196, 48)
+              private val backgroundColor = Color.rgb(247, 250, 245)
+              private val textColor = Color.rgb(24, 53, 31)
+
+              private val categories = arrayOf(
+                  "Crops and Farm Produce",
+                  "Pigs and Piglets",
+                  "Fish and Aquaculture",
+                  "Other Livestock",
+                  "Poultry",
+                  "Seeds and Seedlings",
+                  "Farm Equipment"
+              )
+
+              private var selectedPhotoUri: Uri? = null
+              private var selectedPhotoView: ImageView? = null
+
+              private val photoPicker =
+                  registerForActivityResult(
+                      ActivityResultContracts.OpenDocument()
+                  ) { uri ->
+
+                      if (uri != null) {
+
+                          try {
+                              contentResolver.takePersistableUriPermission(
+                                  uri,
+                                  Intent.FLAG_GRANT_READ_URI_PERMISSION
+                              )
+                          } catch (_: Exception) {
+                          }
+
+                          selectedPhotoUri = uri
+
+                          selectedPhotoView?.apply {
+                              setImageURI(uri)
+                              visibility = View.VISIBLE
+                          }
+                      }
+                  }
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+
+                  try {
+                      seedListings()
+                      showHome()
+                  } catch (e: Exception) {
+                      showStartupError(e)
+                  }
+              }
+
+              private fun showStartupError(error: Exception) {
+
+                  val root = baseLayout()
+
+                  root.gravity = Gravity.CENTER
+
+                  val title = TextView(this).apply {
+                      text = "FarmersMeet"
+                      textSize = 32f
+                      setTextColor(green)
+                      gravity = Gravity.CENTER
+                  }
+
+                  val message = TextView(this).apply {
+                      text = "FarmersMeet could not start correctly.\n\nPlease restart the app."
+                      textSize = 17f
+                      setTextColor(textColor)
+                      gravity = Gravity.CENTER
+                      setPadding(20, 20, 20, 20)
+                  }
+
+                  root.addView(title)
+                  root.addView(message)
+
+                  setContentView(root)
+              }
+
+              private fun baseLayout(): LinearLayout {
+                  return LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      setBackgroundColor(backgroundColor)
+                      setPadding(20, 20, 20, 20)
+                  }
+              }
+
+              private fun heading(value: String): TextView {
+                  return TextView(this).apply {
+                      text = value
+                      textSize = 28f
+                      setTextColor(green)
+                      setTypeface(null, android.graphics.Typeface.BOLD)
+                      setPadding(0, 10, 0, 18)
+                  }
+              }
+
+              private fun makeButton(
+                  value: String,
+                  yellowButton: Boolean = false
+              ): Button {
+
+                  return Button(this).apply {
+
+                      text = value
+                      textSize = 15f
+
+                      setTypeface(
+                          null,
+                          android.graphics.Typeface.BOLD
+                      )
+
+                      setTextColor(
+                          if (yellowButton) textColor else Color.WHITE
+                      )
+
+                      setBackgroundColor(
+                          if (yellowButton) yellow else green
+                      )
+
+                      layoutParams =
+                          LinearLayout.LayoutParams(
+                              LinearLayout.LayoutParams.MATCH_PARENT,
+                              LinearLayout.LayoutParams.WRAP_CONTENT
+                          ).apply {
+                              setMargins(0, 6, 0, 6)
+                          }
+                  }
+              }
+
+              private fun showHome() {
+
+                  val root = baseLayout()
+
+                  root.gravity = Gravity.CENTER
+
+                  val logo = heading("FarmersMeet")
+
+                  logo.textSize = 40f
+                  logo.gravity = Gravity.CENTER
+
+                  val subtitle = TextView(this).apply {
+                      text =
+                          "Connecting farmers, buyers and agricultural businesses"
+                      textSize = 16f
+                      setTextColor(textColor)
+                      gravity = Gravity.CENTER
+                      setPadding(10, 0, 10, 25)
+                  }
+
+                  val enter =
+                      makeButton(
+                          "ENTER MARKETPLACE",
+                          true
+                      )
+
+                  enter.setOnClickListener {
+                      showMarketplace()
+                  }
+
+                  root.addView(logo)
+                  root.addView(subtitle)
+                  root.addView(enter)
+
+                  setContentView(root)
+              }
+
+              private fun showMarketplace() {
+
+                  val scroll = ScrollView(this)
+                  val root = baseLayout()
+
+                  root.addView(
+                      heading("FarmersMeet Marketplace")
+                  )
+
+                  val subtitle = TextView(this).apply {
+                      text = "Buy and sell agricultural products"
+                      textSize = 16f
+                      setTextColor(textColor)
+                      setPadding(0, 0, 0, 12)
+                  }
+
+                  root.addView(subtitle)
+
+                  val search = EditText(this).apply {
+                      hint = "Search pigs, fish, crops..."
+                      textSize = 16f
+                      setSingleLine(true)
+                      setTextColor(textColor)
+
+                      layoutParams =
+                          LinearLayout.LayoutParams(
+                              LinearLayout.LayoutParams.MATCH_PARENT,
+                              LinearLayout.LayoutParams.WRAP_CONTENT
+                          )
+                  }
+
+                  root.addView(search)
+
+                  val searchButton =
+                      makeButton("SEARCH", true)
+
+                  searchButton.setOnClickListener {
+                      showSearchResults(
+                          search.text.toString().trim()
+                      )
+                  }
+
+                  root.addView(searchButton)
+
+                  val favorites =
+                      makeButton("❤️ MY FAVORITES")
+
+                  favorites.setOnClickListener {
+                      showFavorites()
+                  }
+
+                  root.addView(favorites)
+
+                  val myListings =
+                      makeButton("MY LISTINGS")
+
+                  myListings.setOnClickListener {
+                      showMyListings()
+                  }
+
+                  root.addView(myListings)
+
+                  val categoryTitle =
+                      TextView(this).apply {
+                          text = "Browse Categories"
+                          textSize = 21f
+                          setTextColor(green)
+                          setTypeface(
+                              null,
+                              android.graphics.Typeface.BOLD
+                          )
+                          setPadding(0, 15, 0, 8)
+                      }
+
+                  root.addView(categoryTitle)
+
+                  categories.forEach { category ->
+
+                      val button = makeButton(category)
+
+                      button.setOnClickListener {
+                          showListings(category)
+                      }
+
+                      root.addView(button)
+                  }
+
+                  val sell =
+                      makeButton(
+                          "SELL AN ITEM",
+                          true
+                      )
+
+                  sell.setOnClickListener {
+                      showSell()
+                  }
+
+                  root.addView(sell)
+
+                  scroll.addView(root)
+
+                  setContentView(scroll)
+              }
+
+              private fun showListings(category: String) {
+
+                  val results =
+                      getListings()
+                          .filter {
+                              it.category == category
+                          }
+                          .reversed()
+
+                  showListingPage(category, results)
+              }
+
+              private fun showSearchResults(query: String) {
+
+                  val lower = query.lowercase()
+
+                  val results =
+                      if (lower.isEmpty()) {
+                          getListings()
+                      } else {
+                          getListings().filter {
+
+                              it.name.lowercase().contains(lower) ||
+                              it.category.lowercase().contains(lower) ||
+                              it.location.lowercase().contains(lower) ||
+                              it.seller.lowercase().contains(lower)
+                          }
+                      }
+
+                  showListingPage(
+                      if (query.isEmpty())
+                          "All Listings"
+                      else
+                          "Search: $query",
+                      results.reversed()
+                  )
+              }
+
+              private fun showFavorites() {
+
+                  val favorites =
+                      getListings()
+                          .filter {
+                              isFavorite(it.id)
+                          }
+                          .reversed()
+
+                  showListingPage(
+                      "My Favorites",
+                      favorites
+                  )
+              }
+
+              private fun showMyListings() {
+
+        ath
                   android:fillColor="#176B35"
                   android:pathData="M54,28C46,40 42,48 42,58c0,9 5,16 12,22 7,-6 12,-13 12,-22 0,-10 -4,-18 -12,-30z" />
 
