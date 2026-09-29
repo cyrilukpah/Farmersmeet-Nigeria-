@@ -25,7 +25,12 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Locate Android SDK
+      - name: Set up Android SDK tools
+        uses: android-actions/setup-android@v4
+        with:
+          packages: ""
+
+      - name: Install required Android SDK packages
         shell: bash
         run: |
           set -e
@@ -33,50 +38,38 @@ jobs:
           echo "ANDROID_HOME=$ANDROID_HOME"
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
 
-          if [ -z "$ANDROID_HOME" ]; then
-            if [ -d "/usr/local/lib/android/sdk" ]; then
-              export ANDROID_HOME="/usr/local/lib/android/sdk"
-              export ANDROID_SDK_ROOT="/usr/local/lib/android/sdk"
-            else
-              echo "ERROR: Android SDK was not found."
-              exit 1
-            fi
-          fi
+          SDKMANAGER="$(command -v sdkmanager)"
 
-          echo "Using Android SDK:"
-          echo "$ANDROID_HOME"
-
-          test -d "$ANDROID_HOME"
-
-          echo
-          echo "SDK contents:"
-          ls -la "$ANDROID_HOME"
-
-      - name: Install Android SDK packages
-        shell: bash
-        run: |
-          set -e
-
-          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          SDKMANAGER="$SDK/cmdline-tools/22.0/bin/sdkmanager"
-
-          if [ ! -x "$SDKMANAGER" ]; then
-            SDKMANAGER="$(find "$SDK/cmdline-tools" -type f -name sdkmanager | head -n 1)"
-          fi
-
-          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
+          if [ -z "$SDKMANAGER" ]; then
             echo "ERROR: sdkmanager was not found."
             exit 1
           fi
 
           echo "Using sdkmanager:"
-          echo "$SDKMANAGER"
+          "$SDKMANAGER" --version
+
+          echo
+          echo "Accepting Android SDK licenses..."
 
           yes | "$SDKMANAGER" --licenses >/dev/null || true
 
+          echo
+          echo "Installing platform-tools..."
+
           "$SDKMANAGER" "platform-tools"
+
+          echo
+          echo "Installing Android SDK Platform 35..."
+
           "$SDKMANAGER" "platforms;android-35"
+
+          echo
+          echo "Installing Android Build Tools 35.0.0..."
+
           "$SDKMANAGER" "build-tools;35.0.0"
+
+          echo
+          echo "Android SDK packages installed."
 
       - name: Verify Android SDK
         shell: bash
@@ -87,12 +80,13 @@ jobs:
 
           echo "Checking Android SDK..."
 
+          test -d "$SDK"
           test -d "$SDK/platform-tools"
           test -d "$SDK/platforms/android-35"
           test -d "$SDK/build-tools/35.0.0"
 
           echo
-          echo "Android SDK 35 is installed correctly."
+          echo "Android SDK verification successful."
 
           echo
           echo "Platform:"
@@ -102,28 +96,23 @@ jobs:
           echo "Build tools:"
           ls -ld "$SDK/build-tools/35.0.0"
 
-      - name: Show repository structure
+      - name: Verify repository structure
         shell: bash
         run: |
           set -e
 
-          echo "===== REPOSITORY ====="
+          echo "===== REPOSITORY ROOT ====="
           find . -maxdepth 2 -type f | sort
 
-      - name: Verify Android project
-        shell: bash
-        run: |
-          set -e
-
-          echo "Checking project at repository root..."
+          echo
+          echo "Checking Android project..."
 
           test -f settings.gradle
           test -d app
           test -f app/build.gradle
 
-          echo "settings.gradle: OK"
-          echo "app/: OK"
-          echo "app/build.gradle: OK"
+          echo
+          echo "Android project structure is valid."
 
       - name: Prepare Firebase configuration
         shell: bash
@@ -133,22 +122,32 @@ jobs:
           echo "Checking Firebase configuration..."
 
           if [ -f "google-services.json" ]; then
-            echo "Root google-services.json found."
+
+            echo "Found google-services.json in repository root."
 
           elif [ -f "Settings/google-services.json" ]; then
-            echo "Settings/google-services.json found."
+
+            echo "Found Settings/google-services.json."
             cp "Settings/google-services.json" "google-services.json"
 
           else
+
             echo "ERROR: google-services.json was not found."
+            echo
+            echo "Expected:"
+            echo "  google-services.json"
+            echo "or:"
+            echo "  Settings/google-services.json"
             exit 1
+
           fi
 
           cp "google-services.json" "app/google-services.json"
 
           test -s "app/google-services.json"
 
-          echo "Firebase configuration ready."
+          echo
+          echo "Firebase configuration is ready."
 
       - name: Prepare root Gradle build file
         shell: bash
@@ -156,43 +155,70 @@ jobs:
           set -e
 
           if [ -f "build.gradle" ]; then
-            echo "build.gradle found."
+
+            echo "Root build.gradle found."
 
           elif [ -f "app-build.gradle" ]; then
-            echo "build.gradle not found."
-            echo "Using app-build.gradle."
+
+            echo "Root build.gradle not found."
+            echo "Using app-build.gradle as build.gradle."
+
             cp "app-build.gradle" "build.gradle"
 
           else
-            echo "ERROR: No root build.gradle found."
+
+            echo "ERROR: No root build.gradle or app-build.gradle found."
             exit 1
+
           fi
 
           echo
           echo "===== ROOT BUILD FILE ====="
           cat build.gradle
 
+      - name: Show Android project configuration
+        shell: bash
+        run: |
+          set -e
+
+          echo "===== settings.gradle ====="
+          cat settings.gradle
+
+          echo
+          echo "===== app/build.gradle ====="
+          cat app/build.gradle
+
       - name: Install Gradle 8.9
         shell: bash
         run: |
           set -e
 
-          if [ ! -x "$HOME/.gradle-install/gradle-8.9/bin/gradle" ]; then
+          GRADLE_HOME="$HOME/gradle-8.9"
 
-            mkdir -p "$HOME/.gradle-install"
+          if [ ! -x "$GRADLE_HOME/bin/gradle" ]; then
 
-            curl -L \
-              -o "$HOME/.gradle-install/gradle-8.9-bin.zip" \
-              "https://services.gradle.org/distributions/gradle-8.9-bin.zip"
+            echo "Downloading Gradle 8.9..."
+
+            curl -fL \
+              "https://services.gradle.org/distributions/gradle-8.9-bin.zip" \
+              -o "$HOME/gradle-8.9-bin.zip"
+
+            rm -rf "$GRADLE_HOME"
+
+            mkdir -p "$GRADLE_HOME"
 
             unzip -q \
-              "$HOME/.gradle-install/gradle-8.9-bin.zip" \
-              -d "$HOME/.gradle-install"
+              "$HOME/gradle-8.9-bin.zip" \
+              -d "$HOME"
 
           fi
 
-          export PATH="$HOME/.gradle-install/gradle-8.9/bin:$PATH"
+          echo "$GRADLE_HOME/bin" >> "$GITHUB_PATH"
 
+          export PATH="$GRADLE_HOME/bin:$PATH"
+
+          echo
+          echo "===== GRADLE VERSION ====="
           gradle --version
 
       - name: Create Gradle wrapper
@@ -200,12 +226,20 @@ jobs:
         run: |
           set -e
 
-          export PATH="$HOME/.gradle-install/gradle-8.9/bin:$PATH"
+          export PATH="$HOME/gradle-8.9/bin:$PATH"
 
           if [ ! -f "gradlew" ]; then
+
+            echo "Creating Gradle wrapper..."
+
             gradle wrapper \
               --gradle-version 8.9 \
               --distribution-type bin
+
+          else
+
+            echo "Gradle wrapper already exists."
+
           fi
 
           chmod +x gradlew
@@ -220,6 +254,8 @@ jobs:
 
           chmod +x gradlew
 
+          echo "===== GRADLE WRAPPER ====="
+
           ./gradlew --version
 
       - name: Clean project
@@ -229,38 +265,43 @@ jobs:
 
           ./gradlew \
             --no-daemon \
+            --stacktrace \
             clean
 
-      - name: Build Stage 10 APK
+      - name: Build FarmersMeet Stage 10 APK
         shell: bash
         run: |
           set -e
+
+          echo "=========================================="
+          echo " BUILDING FARMERSMEET STAGE 10"
+          echo "=========================================="
 
           ./gradlew \
             --no-daemon \
             --stacktrace \
             assembleDebug
 
-      - name: Verify APK
+      - name: Verify Stage 10 APK
         shell: bash
         run: |
           set -e
 
           APK="app/build/outputs/apk/debug/app-debug.apk"
 
-          if [ ! -f "$APK" ]; then
-            echo "ERROR: APK was not created."
-            exit 1
-          fi
+          echo "Checking APK..."
+
+          test -f "$APK"
 
           echo
-          echo "========================================"
-          echo " FARMERSMEET STAGE 10 APK CREATED"
-          echo "========================================"
+          echo "=========================================="
+          echo " FARMERSMEET STAGE 10 BUILD SUCCESSFUL"
+          echo "=========================================="
+
           echo
           ls -lh "$APK"
 
-      - name: Upload Stage 10 APK
+      - name: Upload FarmersMeet Stage 10 APK
         uses: actions/upload-artifact@v4
         with:
           name: FarmersMeet-Stage-10-APK
