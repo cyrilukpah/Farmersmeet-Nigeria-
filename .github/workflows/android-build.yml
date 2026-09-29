@@ -1,4 +1,4 @@
-name: FarmersMeet Stage 9 APK
+name: FarmersMeet Stage 10 APK
 
 on:
   workflow_dispatch:
@@ -11,58 +11,128 @@ permissions:
 
 jobs:
   build:
-    name: Build FarmersMeet Stage 9
+    name: Build FarmersMeet Stage 10
     runs-on: ubuntu-22.04
 
     steps:
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java 17
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
+          cache: gradle
 
-      - name: Prepare Android SDK
+      - name: Install Android SDK 35
         shell: bash
         run: |
           set -e
 
-          export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          yes | sdkmanager --licenses >/dev/null || true
 
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-
-          if [ -z "$ANDROID_SDK_ROOT" ]; then
-            echo "Android SDK was not found."
-            exit 1
-          fi
-
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$GITHUB_WORKSPACE/local.properties"
-
-          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
-
-          if [ ! -x "$SDKMANAGER" ]; then
-            SDKMANAGER="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -name sdkmanager -type f 2>/dev/null | head -n 1)"
-          fi
-
-          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
-            echo "sdkmanager was not found."
-            find "$ANDROID_SDK_ROOT" -maxdepth 4 -type f -name sdkmanager -print || true
-            exit 1
-          fi
-
-          yes | "$SDKMANAGER" --licenses >/dev/null || true
-
-          "$SDKMANAGER" \
+          sdkmanager \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0"
 
-          echo "Android SDK installation complete."
+      - name: Check Android SDK
+        shell: bash
+        run: |
+          set -e
 
-      - name: Create FarmersMeet Stage 9 project
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+
+          test -d "$ANDROID_HOME"
+
+          echo "Android platforms:"
+          ls -la "$ANDROID_HOME/platforms"
+
+          echo "Android build tools:"
+          ls -la "$ANDROID_HOME/build-tools"
+
+      - name: Locate Firebase configuration
+        shell: bash
+        run: |
+          set -e
+
+          echo "Searching repository for google-services.json..."
+
+          if [ -f "android/app/google-services.json" ]; then
+            echo "Found: android/app/google-services.json"
+            mkdir -p FarmersMeet/app
+            cp "android/app/google-services.json" \
+               "FarmersMeet/app/google-services.json"
+
+          elif [ -f "app/google-services.json" ]; then
+            echo "Found: app/google-services.json"
+            mkdir -p FarmersMeet/app
+            cp "app/google-services.json" \
+               "FarmersMeet/app/google-services.json"
+
+          elif [ -f "google-services.json" ]; then
+            echo "Found: google-services.json"
+            mkdir -p FarmersMeet/app
+            cp "google-services.json" \
+               "FarmersMeet/app/google-services.json"
+
+          else
+            echo "ERROR: google-services.json was not found."
+            echo
+            echo "Expected one of:"
+            echo "  android/app/google-services.json"
+            echo "  app/google-services.json"
+            echo "  google-services.json"
+            exit 1
+          fi
+
+          test -f FarmersMeet/app/google-services.json
+
+          echo "Firebase configuration copied successfully."
+
+      - name: Verify Firebase package
+        shell: bash
+        run: |
+          set -e
+
+          python3 - <<'PY'
+          import json
+
+          path = "FarmersMeet/app/google-services.json"
+
+          with open(path, "r", encoding="utf-8") as f:
+              data = json.load(f)
+
+          clients = data.get("client", [])
+
+          found = False
+
+          for client in clients:
+              package_name = (
+                  client
+                  .get("client_info", {})
+                  .get("android_client_info", {})
+                  .get("package_name")
+              )
+
+              print("Firebase Android package:", package_name)
+
+              if package_name == "ng.farmersmeet.nigeria":
+                  found = True
+
+          if not found:
+              raise SystemExit(
+                  "ERROR: google-services.json does not contain "
+                  "the expected package ng.farmersmeet.nigeria"
+              )
+
+          print("Firebase package verification passed.")
+          PY
+
+      - name: Create FarmersMeet Stage 10 project
         shell: bash
         run: |
           set -e
@@ -71,6 +141,21 @@ jobs:
 
           mkdir -p FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria
           mkdir -p FarmersMeet/app/src/main/res/values
+
+          # Restore Firebase configuration after recreating the project.
+          if [ -f "android/app/google-services.json" ]; then
+            cp "android/app/google-services.json" \
+               "FarmersMeet/app/google-services.json"
+          elif [ -f "app/google-services.json" ]; then
+            cp "app/google-services.json" \
+               "FarmersMeet/app/google-services.json"
+          elif [ -f "google-services.json" ]; then
+            cp "google-services.json" \
+               "FarmersMeet/app/google-services.json"
+          else
+            echo "ERROR: google-services.json disappeared."
+            exit 1
+          fi
 
           cat > FarmersMeet/settings.gradle <<'EOF'
           pluginManagement {
@@ -91,23 +176,29 @@ jobs:
           }
 
           rootProject.name = "FarmersMeetNigeria"
+
           include(":app")
           EOF
 
           cat > FarmersMeet/build.gradle <<'EOF'
           plugins {
               id 'com.android.application' version '8.7.3' apply false
+              id 'org.jetbrains.kotlin.android' version '1.9.24' apply false
+              id 'com.google.gms.google-services' version '4.5.0' apply false
           }
           EOF
 
           cat > FarmersMeet/gradle.properties <<'EOF'
+          android.useAndroidX=true
+          android.nonTransitiveRClass=true
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-          android.useAndroidX=false
           EOF
 
           cat > FarmersMeet/app/build.gradle <<'EOF'
           plugins {
               id 'com.android.application'
+              id 'org.jetbrains.kotlin.android'
+              id 'com.google.gms.google-services'
           }
 
           android {
@@ -118,8 +209,8 @@ jobs:
                   applicationId 'ng.farmersmeet.nigeria'
                   minSdk 24
                   targetSdk 35
-                  versionCode 10
-                  versionName "9.0"
+                  versionCode 11
+                  versionName "10.0"
               }
 
               buildTypes {
@@ -137,13 +228,31 @@ jobs:
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
+
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.core:core-ktx:1.15.0'
+              implementation 'androidx.appcompat:appcompat:1.7.0'
+              implementation 'androidx.activity:activity-ktx:1.10.1'
+
+              implementation platform(
+                  'com.google.firebase:firebase-bom:34.19.0'
+              )
+
+              implementation 'com.google.firebase:firebase-auth'
+              implementation 'com.google.firebase:firebase-firestore'
           }
           EOF
 
           cat > FarmersMeet/app/src/main/AndroidManifest.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
 
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+          <manifest
+              xmlns:android="http://schemas.android.com/apk/res/android">
 
               <application
                   android:allowBackup="true"
@@ -153,11 +262,15 @@ jobs:
 
                   <activity
                       android:name=".MainActivity"
-                      android:exported="true">
+                      android:exported="true"
+                      android:screenOrientation="portrait">
 
                       <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
+                          <action
+                              android:name="android.intent.action.MAIN" />
+
+                          <category
+                              android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
 
                   </activity>
@@ -174,1588 +287,804 @@ jobs:
 
               <style
                   name="AppTheme"
-                  parent="@android:style/Theme.Material.Light.NoActionBar">
+                  parent="Theme.AppCompat.Light.NoActionBar">
 
                   <item name="android:fontFamily">sans</item>
                   <item name="android:colorAccent">#176B35</item>
                   <item name="android:statusBarColor">#0D4D25</item>
                   <item name="android:navigationBarColor">#0D4D25</item>
                   <item name="android:windowLightStatusBar">false</item>
-                  <item name="android:windowActionModeOverlay">true</item>
 
               </style>
 
           </resources>
           EOF
 
-          cat > FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.java <<'EOF'
-          package ng.farmersmeet.nigeria;
-
-          import android.app.Activity;
-          import android.os.Bundle;
-          import android.graphics.Color;
-          import android.graphics.Typeface;
-          import android.content.Context;
-          import android.content.Intent;
-          import android.net.Uri;
-          import android.view.Gravity;
-          import android.view.View;
-          import android.widget.Button;
-          import android.widget.EditText;
-          import android.widget.LinearLayout;
-          import android.widget.ScrollView;
-          import android.widget.Spinner;
-          import android.widget.ArrayAdapter;
-          import android.widget.TextView;
-          import android.widget.Toast;
-
-          import org.json.JSONArray;
-          import org.json.JSONObject;
-
-          import java.util.ArrayList;
-          import java.util.List;
-
-          public class MainActivity extends Activity {
-
-              private static final String PREFS = "farmersmeet_stage9";
-
-              private static final int GREEN = Color.rgb(23, 107, 53);
-              private static final int DARK_GREEN = Color.rgb(13, 77, 37);
-              private static final int YELLOW = Color.rgb(244, 196, 48);
-              private static final int BACKGROUND = Color.rgb(247, 250, 245);
-              private static final int TEXT = Color.rgb(24, 53, 31);
-
-              private final String[] categories = {
-                      "Crops and Farm Produce",
-                      "Pigs and Piglets",
-                      "Fish and Aquaculture",
-                      "Other Livestock",
-                      "Poultry",
-                      "Seeds and Seedlings",
-                      "Farm Equipment"
-              };
-
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-
-                  try {
-                      seedListings();
-                      showHome();
-                  } catch (Exception e) {
-                      showFatalError(e);
-                  }
-              }
-
-              private void showFatalError(Exception e) {
-                  LinearLayout root = baseLayout();
-
-                  TextView title = heading("FarmersMeet");
-                  root.addView(title);
-
-                  TextView error = textView(
-                          "The app encountered an error while starting.\n\n" +
-                          e.getClass().getSimpleName() + "\n" +
-                          String.valueOf(e.getMessage())
-                  );
-
-                  root.addView(error);
-
-                  Button retry = button("RESTART APP", true);
-                  retry.setOnClickListener(v -> {
-                      try {
-                          showHome();
-                      } catch (Exception ex) {
-                          showFatalError(ex);
-                      }
-                  });
-
-                  root.addView(retry);
-
-                  setContentView(root);
-              }
-
-              private LinearLayout baseLayout() {
-                  LinearLayout root = new LinearLayout(this);
-                  root.setOrientation(LinearLayout.VERTICAL);
-                  root.setBackgroundColor(BACKGROUND);
-                  root.setPadding(20, 20, 20, 20);
-                  return root;
-              }
-
-              private ScrollView scrollRoot() {
-                  ScrollView scroll = new ScrollView(this);
-                  scroll.setFillViewport(true);
-
-                  LinearLayout root = baseLayout();
-                  scroll.addView(root);
-
-                  return scroll;
-              }
-
-              private TextView heading(String value) {
-                  TextView view = new TextView(this);
-                  view.setText(value);
-                  view.setTextSize(28);
-                  view.setTextColor(GREEN);
-                  view.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-                  view.setPadding(0, 10, 0, 18);
-                  return view;
-              }
-
-              private TextView textView(String value) {
-                  TextView view = new TextView(this);
-                  view.setText(value);
-                  view.setTextSize(16);
-                  view.setTextColor(TEXT);
-                  view.setPadding(0, 8, 0, 12);
-                  return view;
-              }
-
-              private EditText field(String hint) {
-                  EditText edit = new EditText(this);
-                  edit.setHint(hint);
-                  edit.setTextSize(16);
-                  edit.setTextColor(TEXT);
-                  edit.setHintTextColor(Color.GRAY);
-
-                  LinearLayout.LayoutParams params =
-                          new LinearLayout.LayoutParams(
-                                  LinearLayout.LayoutParams.MATCH_PARENT,
-                                  LinearLayout.LayoutParams.WRAP_CONTENT
-                          );
-
-                  params.setMargins(0, 5, 0, 5);
-                  edit.setLayoutParams(params);
-
-                  return edit;
-              }
-
-              private Button button(String value, boolean yellow) {
-                  Button b = new Button(this);
-
-                  b.setText(value);
-                  b.setTextSize(15);
-                  b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-                  b.setTextColor(yellow ? TEXT : Color.WHITE);
-                  b.setBackgroundColor(yellow ? YELLOW : GREEN);
-
-                  LinearLayout.LayoutParams params =
-                          new LinearLayout.LayoutParams(
-                                  LinearLayout.LayoutParams.MATCH_PARENT,
-                                  LinearLayout.LayoutParams.WRAP_CONTENT
-                          );
-
-                  params.setMargins(0, 6, 0, 6);
-                  b.setLayoutParams(params);
-
-                  return b;
-              }
-
-              private Button button(String value) {
-                  return button(value, false);
-              }
-
-              private void showHome() {
-                  LinearLayout root = baseLayout();
-
-                  root.setGravity(Gravity.CENTER);
-
-                  TextView logo = heading("FarmersMeet");
-                  logo.setTextSize(40);
-                  logo.setGravity(Gravity.CENTER);
-
-                  TextView stage = textView("STAGE 9");
-                  stage.setGravity(Gravity.CENTER);
-                  stage.setTextColor(GREEN);
-
-                  TextView subtitle = textView(
-                          "Connecting farmers, buyers and agricultural businesses"
-                  );
-                  subtitle.setGravity(Gravity.CENTER);
-
-                  Button enter = button("ENTER MARKETPLACE", true);
-
-                  enter.setOnClickListener(v -> showMarketplace());
-
-                  root.addView(logo);
-                  root.addView(stage);
-                  root.addView(subtitle);
-                  root.addView(enter);
-
-                  setContentView(root);
-              }
-
-              private void showMarketplace() {
-                  ScrollView scroll = scrollRoot();
-                  LinearLayout root = (LinearLayout) scroll.getChildAt(0);
-
-                  root.addView(heading("FarmersMeet Marketplace"));
-
-                  root.addView(
-                          textView("Buy and sell agricultural products")
-                  );
-
-                  EditText search = field(
-                          "Search pigs, fish, crops..."
-                  );
-
-                  root.addView(search);
-
-                  Button searchButton = button("SEARCH", true);
-
-                  searchButton.setOnClickListener(v ->
-                          showSearchResults(
-                                  search.getText().toString().trim()
-                          )
-                  );
-
-                  root.addView(searchButton);
-
-                  Button profile = button("MY SELLER PROFILE");
-
-                  profile.setOnClickListener(v -> showSellerProfile());
-
-                  root.addView(profile);
-
-                  Button favorites = button("MY FAVORITES");
-
-                  favorites.setOnClickListener(v -> showFavorites());
-
-                  root.addView(favorites);
-
-                  Button myListings = button("MY LISTINGS");
-
-                  myListings.setOnClickListener(v -> showMyListings());
-
-                  root.addView(myListings);
-
-                  TextView categoriesTitle =
-                          textView("Browse Categories");
-
-                  categoriesTitle.setTextSize(21);
-                  categoriesTitle.setTextColor(GREEN);
-                  categoriesTitle.setTypeface(
-                          Typeface.DEFAULT,
-                          Typeface.BOLD
-                  );
-
-                  root.addView(categoriesTitle);
-
-                  for (String category : categories) {
-                      Button b = button(category);
-
-                      b.setOnClickListener(v ->
-                              showListings(category)
-                      );
-
-                      root.addView(b);
-                  }
-
-                  Button sell = button("SELL AN ITEM", true);
-
-                  sell.setOnClickListener(v -> showSell(null));
-
-                  root.addView(sell);
-
-                  setContentView(scroll);
-              }
-
-              private void showListings(String category) {
-                  List<Listing> result = new ArrayList<>();
-
-                  for (Listing item : getListings()) {
-                      if (category.equals(item.category)) {
-                          result.add(item);
-                      }
-                  }
-
-                  showListingPage(category, result);
-              }
-
-              private void showSearchResults(String query) {
-                  String q = query.toLowerCase();
-                  List<Listing> result = new ArrayList<>();
-
-                  for (Listing item : getListings()) {
-                      if (
-                              q.isEmpty() ||
-                              item.name.toLowerCase().contains(q) ||
-                              item.category.toLowerCase().contains(q) ||
-                              item.location.toLowerCase().contains(q) ||
-                              item.seller.toLowerCase().contains(q) ||
-                              item.description.toLowerCase().contains(q)
-                      ) {
-                          result.add(item);
-                      }
-                  }
-
-                  showListingPage(
-                          q.isEmpty() ? "All Listings" : "Search Results",
-                          result
-                  );
-              }
-
-              private void showFavorites() {
-                  List<Listing> result = new ArrayList<>();
-
-                  for (Listing item : getListings()) {
-                      if (isFavorite(item.id)) {
-                          result.add(item);
-                      }
-                  }
-
-                  showListingPage("My Favorites", result);
-              }
-
-              private void showMyListings() {
-                  ScrollView scroll = scrollRoot();
-                  LinearLayout root = (LinearLayout) scroll.getChildAt(0);
-
-                  root.addView(heading("My Listings"));
-
-                  List<Listing> result = new ArrayList<>();
-
-                  for (Listing item : getListings()) {
-                      if (item.isMine) {
-                          result.add(item);
-                      }
-                  }
-
-                  if (result.isEmpty()) {
-                      root.addView(
-                              textView(
-                                      "You have not posted any listings yet."
-                              )
-                      );
+          cat > FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt <<'EOF'
+          package ng.farmersmeet.nigeria
+
+          import android.content.Context
+          import android.content.Intent
+          import android.graphics.Color
+          import android.net.Uri
+          import android.os.Bundle
+          import android.view.Gravity
+          import android.view.View
+          import android.widget.Button
+          import android.widget.EditText
+          import android.widget.LinearLayout
+          import android.widget.ScrollView
+          import android.widget.TextView
+          import android.widget.Toast
+
+          import androidx.appcompat.app.AppCompatActivity
+
+          import com.google.firebase.auth.FirebaseAuth
+          import com.google.firebase.firestore.FirebaseFirestore
+
+          class MainActivity : AppCompatActivity() {
+
+              private lateinit var auth: FirebaseAuth
+              private lateinit var db: FirebaseFirestore
+
+              private val green = Color.rgb(23, 107, 53)
+              private val darkGreen = Color.rgb(13, 77, 37)
+              private val yellow = Color.rgb(244, 196, 48)
+              private val background = Color.rgb(247, 250, 245)
+              private val textColor = Color.rgb(24, 53, 31)
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+
+                  auth = FirebaseAuth.getInstance()
+                  db = FirebaseFirestore.getInstance()
+
+                  if (auth.currentUser != null) {
+                      showMarketplace()
                   } else {
-                      for (Listing item : result) {
-                          addListingCard(root, item, true);
+                      showWelcome()
+                  }
+              }
+
+              private fun base(): LinearLayout {
+                  return LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      setBackgroundColor(background)
+                      setPadding(24, 24, 24, 24)
+                  }
+              }
+
+              private fun title(text: String): TextView {
+                  return TextView(this).apply {
+                      this.text = text
+                      textSize = 30f
+                      setTextColor(green)
+                      setTypeface(
+                          null,
+                          android.graphics.Typeface.BOLD
+                      )
+                      setPadding(0, 10, 0, 18)
+                  }
+              }
+
+              private fun field(hint: String): EditText {
+                  return EditText(this).apply {
+                      this.hint = hint
+                      textSize = 16f
+                      setSingleLine(true)
+                      setTextColor(textColor)
+
+                      layoutParams =
+                          LinearLayout.LayoutParams(
+                              LinearLayout.LayoutParams.MATCH_PARENT,
+                              LinearLayout.LayoutParams.WRAP_CONTENT
+                          ).apply {
+                              setMargins(0, 6, 0, 6)
+                          }
+                  }
+              }
+
+              private fun button(
+                  text: String,
+                  yellowButton: Boolean = false
+              ): Button {
+                  return Button(this).apply {
+                      this.text = text
+                      textSize = 15f
+                      setTypeface(
+                          null,
+                          android.graphics.Typeface.BOLD
+                      )
+
+                      setTextColor(
+                          if (yellowButton) textColor
+                          else Color.WHITE
+                      )
+
+                      setBackgroundColor(
+                          if (yellowButton) yellow
+                          else green
+                      )
+
+                      layoutParams =
+                          LinearLayout.LayoutParams(
+                              LinearLayout.LayoutParams.MATCH_PARENT,
+                              LinearLayout.LayoutParams.WRAP_CONTENT
+                          ).apply {
+                              setMargins(0, 6, 0, 6)
+                          }
+                  }
+              }
+
+              private fun showWelcome() {
+                  val root = base()
+                  root.gravity = Gravity.CENTER
+
+                  val logo = title("FarmersMeet").apply {
+                      textSize = 40f
+                      gravity = Gravity.CENTER
+                  }
+
+                  val stage = TextView(this).apply {
+                      text = "STAGE 10"
+                      textSize = 13f
+                      gravity = Gravity.CENTER
+                      setTextColor(green)
+                      setPadding(0, 0, 0, 12)
+                  }
+
+                  val description =
+                      TextView(this).apply {
+                          text =
+                              "A marketplace connecting farmers, " +
+                              "buyers and agricultural businesses."
+
+                          textSize = 16f
+                          gravity = Gravity.CENTER
+                          setTextColor(textColor)
+                          setPadding(10, 0, 10, 25)
                       }
+
+                  val login =
+                      button("LOGIN", true)
+
+                  login.setOnClickListener {
+                      showLogin()
                   }
 
-                  Button sell = button("SELL AN ITEM", true);
-                  sell.setOnClickListener(v -> showSell(null));
-                  root.addView(sell);
+                  val register =
+                      button("CREATE ACCOUNT")
 
-                  Button back = button("BACK TO MARKETPLACE");
-                  back.setOnClickListener(v -> showMarketplace());
-                  root.addView(back);
+                  register.setOnClickListener {
+                      showRegister()
+                  }
 
-                  setContentView(scroll);
+                  root.addView(logo)
+                  root.addView(stage)
+                  root.addView(description)
+                  root.addView(login)
+                  root.addView(register)
+
+                  setContentView(root)
               }
 
-              private void showListingPage(
-                      String title,
-                      List<Listing> listings
-              ) {
-                  ScrollView scroll = scrollRoot();
-                  LinearLayout root = (LinearLayout) scroll.getChildAt(0);
+              private fun showLogin() {
+                  val scroll = ScrollView(this)
+                  val root = base()
 
-                  root.addView(heading(title));
+                  root.addView(title("Login"))
 
-                  if (listings.isEmpty()) {
-                      root.addView(textView("No listings found."));
-                  } else {
-                      for (Listing item : listings) {
-                          addListingCard(root, item, false);
-                      }
-                  }
+                  val email =
+                      field("Email address")
 
-                  Button sell = button("SELL AN ITEM", true);
-                  sell.setOnClickListener(v -> showSell(null));
-                  root.addView(sell);
+                  email.inputType =
+                      android.text.InputType.TYPE_CLASS_TEXT or
+                      android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
 
-                  Button back = button("BACK TO MARKETPLACE");
-                  back.setOnClickListener(v -> showMarketplace());
-                  root.addView(back);
+                  val password =
+                      field("Password")
 
-                  setContentView(scroll);
-              }
+                  password.inputType =
+                      android.text.InputType.TYPE_CLASS_TEXT or
+                      android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
 
-              private void addListingCard(
-                      LinearLayout root,
-                      Listing item,
-                      boolean mineOnly
-              ) {
-                  LinearLayout card = new LinearLayout(this);
-                  card.setOrientation(LinearLayout.VERTICAL);
-                  card.setBackgroundColor(Color.WHITE);
-                  card.setPadding(16, 14, 16, 14);
+                  root.addView(email)
+                  root.addView(password)
 
-                  LinearLayout.LayoutParams cardParams =
-                          new LinearLayout.LayoutParams(
-                                  LinearLayout.LayoutParams.MATCH_PARENT,
-                                  LinearLayout.LayoutParams.WRAP_CONTENT
-                          );
+                  val login =
+                      button("LOGIN", true)
 
-                  cardParams.setMargins(0, 0, 0, 14);
-                  card.setLayoutParams(cardParams);
+                  login.setOnClickListener {
 
-                  TextView name = textView(item.name);
-                  name.setTextSize(21);
-                  name.setTextColor(GREEN);
-                  name.setTypeface(
-                          Typeface.DEFAULT,
-                          Typeface.BOLD
-                  );
+                      val emailText =
+                          email.text.toString().trim()
 
-                  card.addView(name);
-
-                  TextView price = textView(item.price);
-                  price.setTextSize(20);
-                  price.setTextColor(DARK_GREEN);
-                  price.setTypeface(
-                          Typeface.DEFAULT,
-                          Typeface.BOLD
-                  );
-
-                  card.addView(price);
-
-                  card.addView(
-                          textView(
-                                  "Quantity: " + item.quantity +
-                                  "\nLocation: " + item.location +
-                                  "\nSeller: " + item.seller
-                          )
-                  );
-
-                  Button favorite = button(
-                          isFavorite(item.id)
-                                  ? "REMOVE FAVORITE"
-                                  : "SAVE FAVORITE"
-                  );
-
-                  favorite.setOnClickListener(v -> {
-                      toggleFavorite(item.id);
-
-                      favorite.setText(
-                              isFavorite(item.id)
-                                      ? "REMOVE FAVORITE"
-                                      : "SAVE FAVORITE"
-                      );
-                  });
-
-                  card.addView(favorite);
-
-                  Button details = button("VIEW DETAILS");
-
-                  details.setOnClickListener(
-                          v -> showDetails(item)
-                  );
-
-                  card.addView(details);
-
-                  if (!item.isMine) {
-                      Button seller = button(
-                              "VIEW SELLER PROFILE"
-                      );
-
-                      seller.setOnClickListener(
-                              v -> showPublicSellerProfile(
-                                      item.seller
-                              )
-                      );
-
-                      card.addView(seller);
-                  }
-
-                  if (mineOnly && item.isMine) {
-                      Button edit =
-                              button("EDIT LISTING", true);
-
-                      edit.setOnClickListener(
-                              v -> showSell(item)
-                      );
-
-                      card.addView(edit);
-
-                      Button delete =
-                              button("DELETE LISTING");
-
-                      delete.setOnClickListener(v -> {
-                          deleteListing(item.id);
-
-                          Toast.makeText(
-                                  this,
-                                  "Listing deleted.",
-                                  Toast.LENGTH_SHORT
-                          ).show();
-
-                          showMyListings();
-                      });
-
-                      card.addView(delete);
-                  }
-
-                  root.addView(card);
-              }
-
-              private void showSellerProfile() {
-                  ScrollView scroll = scrollRoot();
-                  LinearLayout root = (LinearLayout) scroll.getChildAt(0);
-
-                  root.addView(heading("My Seller Profile"));
-
-                  SellerProfile profile = getProfile();
-
-                  EditText name = field("Your name");
-                  name.setText(profile.name);
-
-                  EditText farm = field(
-                          "Farm / Business name"
-                  );
-                  farm.setText(profile.farmName);
-
-                  EditText phone = field("Phone number");
-                  phone.setText(profile.phone);
-
-                  EditText location = field(
-                          "Farm / Business location"
-                  );
-                  location.setText(profile.location);
-
-                  EditText about = field(
-                          "About your farm or business"
-                  );
-                  about.setText(profile.about);
-                  about.setMinLines(5);
-                  about.setGravity(Gravity.TOP);
-
-                  root.addView(name);
-                  root.addView(farm);
-                  root.addView(phone);
-                  root.addView(location);
-                  root.addView(about);
-
-                  Button save = button(
-                          "SAVE SELLER PROFILE",
-                          true
-                  );
-
-                  save.setOnClickListener(v -> {
-                      String n = name.getText().toString().trim();
-                      String f = farm.getText().toString().trim();
-                      String p = phone.getText().toString().trim();
+                      val passwordText =
+                          password.text.toString()
 
                       if (
-                              n.isEmpty() ||
-                              f.isEmpty() ||
-                              p.isEmpty()
+                          emailText.isEmpty() ||
+                          passwordText.isEmpty()
                       ) {
-                          Toast.makeText(
-                                  this,
-                                  "Please provide your name, farm/business name and phone.",
-                                  Toast.LENGTH_LONG
-                          ).show();
-
-                          return;
+                          toast(
+                              "Enter your email and password."
+                          )
+                          return@setOnClickListener
                       }
 
-                      saveProfile(
-                              new SellerProfile(
-                                      n,
-                                      f,
-                                      p,
-                                      location.getText().toString().trim(),
-                                      about.getText().toString().trim()
-                              )
-                      );
-
-                      Toast.makeText(
-                              this,
-                              "Seller profile saved.",
-                              Toast.LENGTH_SHORT
-                      ).show();
-
-                      showMarketplace();
-                  });
-
-                  root.addView(save);
-
-                  Button listings =
-                          button("VIEW MY LISTINGS");
-
-                  listings.setOnClickListener(
-                          v -> showMyListings()
-                  );
-
-                  root.addView(listings);
-
-                  Button back =
-                          button("BACK TO MARKETPLACE");
-
-                  back.setOnClickListener(
-                          v -> showMarketplace()
-                  );
-
-                  root.addView(back);
-
-                  setContentView(scroll);
-              }
-
-              private void showPublicSellerProfile(
-                      String sellerName
-              ) {
-                  ScrollView scroll = scrollRoot();
-                  LinearLayout root = (LinearLayout) scroll.getChildAt(0);
-
-                  SellerProfile profile =
-                          getProfileForSeller(sellerName);
-
-                  root.addView(
-                          heading(
-                                  profile.farmName.isEmpty()
-                                          ? sellerName
-                                          : profile.farmName
-                          )
-                  );
-
-                  root.addView(
-                          textView(
-                                  "SELLER\n" +
-                                  profile.name +
-                                  "\n\nPHONE\n" +
-                                  profile.phone +
-                                  "\n\nLOCATION\n" +
-                                  profile.location +
-                                  "\n\nABOUT\n" +
-                                  (
-                                          profile.about.isEmpty()
-                                                  ? "No description provided."
-                                                  : profile.about
-                                  )
-                          )
-                  );
-
-                  Button call = button("CALL SELLER", true);
-
-                  call.setOnClickListener(v -> {
-                      if (!profile.phone.isEmpty()) {
-                          try {
-                              startActivity(
-                                      new Intent(
-                                              Intent.ACTION_DIAL,
-                                              Uri.parse(
-                                                      "tel:" +
-                                                      profile.phone
-                                              )
-                                      )
-                              );
-                          } catch (Exception e) {
-                              Toast.makeText(
-                                      this,
-                                      "Unable to open phone dialer.",
-                                      Toast.LENGTH_SHORT
-                              ).show();
-                          }
-                      }
-                  });
-
-                  root.addView(call);
-
-                  Button back = button("BACK");
-
-                  back.setOnClickListener(
-                          v -> showMarketplace()
-                  );
-
-                  root.addView(back);
-
-                  setContentView(scroll);
-              }
-
-              private SellerProfile getProfileForSeller(
-                      String seller
-              ) {
-                  SellerProfile saved = getProfile();
-
-                  if (
-                          saved.name.equalsIgnoreCase(seller)
-                  ) {
-                      return saved;
-                  }
-
-                  return new SellerProfile(
-                          seller,
-                          seller,
-                          "",
-                          "",
-                          ""
-                  );
-              }
-
-              private void showDetails(Listing item) {
-                  ScrollView scroll = scrollRoot();
-                  LinearLayout root = (LinearLayout) scroll.getChildAt(0);
-
-                  root.addView(heading(item.name));
-
-                  root.addView(
-                          textView(
-                                  "PRICE\n" + item.price +
-                                  "\n\nCATEGORY\n" + item.category +
-                                  "\n\nQUANTITY\n" + item.quantity +
-                                  "\n\nLOCATION\n" + item.location +
-                                  "\n\nSELLER\n" + item.seller +
-                                  "\n\nPHONE\n" + item.phone +
-                                  "\n\nDESCRIPTION\n" +
-                                  (
-                                          item.description.isEmpty()
-                                                  ? "No description provided."
-                                                  : item.description
-                                  )
-                          )
-                  );
-
-                  Button favorite = button(
-                          isFavorite(item.id)
-                                  ? "REMOVE FAVORITE"
-                                  : "SAVE FAVORITE"
-                  );
-
-                  favorite.setOnClickListener(v -> {
-                      toggleFavorite(item.id);
-
-                      favorite.setText(
-                              isFavorite(item.id)
-                                      ? "REMOVE FAVORITE"
-                                      : "SAVE FAVORITE"
-                      );
-                  });
-
-                  root.addView(favorite);
-
-                  Button call = button(
-                          "CALL SELLER",
-                          true
-                  );
-
-                  call.setOnClickListener(v -> {
-                      if (!item.phone.isEmpty()) {
-                          try {
-                              startActivity(
-                                      new Intent(
-                                              Intent.ACTION_DIAL,
-                                              Uri.parse(
-                                                      "tel:" +
-                                                      item.phone
-                                              )
-                                      )
-                              );
-                          } catch (Exception e) {
-                              Toast.makeText(
-                                      this,
-                                      "Unable to open phone dialer.",
-                                      Toast.LENGTH_SHORT
-                              ).show();
-                          }
-                      }
-                  });
-
-                  root.addView(call);
-
-                  Button whatsapp =
-                          button("WHATSAPP SELLER");
-
-                  whatsapp.setOnClickListener(v -> {
-                      if (!item.phone.isEmpty()) {
-                          String clean =
-                                  item.phone
-                                          .replace("+", "")
-                                          .replace(" ", "");
-
-                          String message =
-                                  "Hello, I saw your " +
-                                  item.name +
-                                  " listing on FarmersMeet.";
-
-                          try {
-                              Intent intent =
-                                      new Intent(
-                                              Intent.ACTION_VIEW,
-                                              Uri.parse(
-                                                      "https://wa.me/" +
-                                                      clean +
-                                                      "?text=" +
-                                                      Uri.encode(message)
-                                              )
-                                      );
-
-                              startActivity(intent);
-                          } catch (Exception e) {
-                              Toast.makeText(
-                                      this,
-                                      "WhatsApp could not be opened.",
-                                      Toast.LENGTH_SHORT
-                              ).show();
-                          }
-                      }
-                  });
-
-                  root.addView(whatsapp);
-
-                  if (item.isMine) {
-                      Button edit =
-                              button("EDIT LISTING", true);
-
-                      edit.setOnClickListener(
-                              v -> showSell(item)
-                      );
-
-                      root.addView(edit);
-
-                      Button delete =
-                              button("DELETE LISTING");
-
-                      delete.setOnClickListener(v -> {
-                          deleteListing(item.id);
-                          showMyListings();
-                      });
-
-                      root.addView(delete);
-                  }
-
-                  Button back = button("BACK");
-
-                  back.setOnClickListener(
-                          v -> showListings(item.category)
-                  );
-
-                  root.addView(back);
-
-                  setContentView(scroll);
-              }
-
-              private void showSell(Listing existing) {
-                  ScrollView scroll = scrollRoot();
-                  LinearLayout root = (LinearLayout) scroll.getChildAt(0);
-
-                  root.addView(
-                          heading(
-                                  existing == null
-                                          ? "Sell an Item"
-                                          : "Edit Listing"
-                          )
-                  );
-
-                  Spinner category = new Spinner(this);
-
-                  ArrayAdapter<String> adapter =
-                          new ArrayAdapter<>(
-                                  this,
-                                  android.R.layout.simple_spinner_item,
-                                  categories
-                          );
-
-                  adapter.setDropDownViewResource(
-                          android.R.layout.simple_spinner_dropdown_item
-                  );
-
-                  category.setAdapter(adapter);
-
-                  if (existing != null) {
-                      int index = -1;
-
-                      for (int i = 0; i < categories.length; i++) {
-                          if (
-                                  categories[i].equals(
-                                          existing.category
-                                  )
-                          ) {
-                              index = i;
-                              break;
-                          }
-                      }
-
-                      if (index >= 0) {
-                          category.setSelection(index);
-                      }
-                  }
-
-                  root.addView(category);
-
-                  EditText name =
-                          field("Product name");
-
-                  EditText price =
-                          field("Price in Naira");
-
-                  EditText quantity =
-                          field("Quantity");
-
-                  EditText location =
-                          field("Location");
-
-                  EditText seller =
-                          field("Seller name");
-
-                  EditText phone =
-                          field("Phone number");
-
-                  EditText description =
-                          field("Description");
-
-                  description.setMinLines(4);
-                  description.setGravity(Gravity.TOP);
-
-                  if (existing != null) {
-                      name.setText(existing.name);
-                      price.setText(
-                              existing.price.replace("₦", "")
-                      );
-                      quantity.setText(existing.quantity);
-                      location.setText(existing.location);
-                      seller.setText(existing.seller);
-                      phone.setText(existing.phone);
-                      description.setText(
-                              existing.description
-                      );
-                  } else {
-                      SellerProfile profile =
-                              getProfile();
-
-                      seller.setText(profile.name);
-                      phone.setText(profile.phone);
-                      location.setText(profile.location);
-                  }
-
-                  root.addView(name);
-                  root.addView(price);
-                  root.addView(quantity);
-                  root.addView(location);
-                  root.addView(seller);
-                  root.addView(phone);
-                  root.addView(description);
-
-                  Button save = button(
-                          existing == null
-                                  ? "POST LISTING"
-                                  : "SAVE CHANGES",
-                          true
-                  );
-
-                  save.setOnClickListener(v -> {
-                      String n =
-                              name.getText().toString().trim();
-
-                      String p =
-                              price.getText().toString().trim();
-
-                      String q =
-                              quantity.getText().toString().trim();
-
-                      String l =
-                              location.getText().toString().trim();
-
-                      String s =
-                              seller.getText().toString().trim();
-
-                      String ph =
-                              phone.getText().toString().trim();
-
-                      if (
-                              n.isEmpty() ||
-                              p.isEmpty() ||
-                              q.isEmpty() ||
-                              l.isEmpty() ||
-                              s.isEmpty() ||
-                              ph.isEmpty()
-                      ) {
-                          Toast.makeText(
-                                  this,
-                                  "Please complete all required fields.",
-                                  Toast.LENGTH_LONG
-                          ).show();
-
-                          return;
-                      }
-
-                      long id =
-                              existing == null
-                                      ? System.currentTimeMillis()
-                                      : existing.id;
-
-                      Listing item =
-                              new Listing(
-                                      id,
-                                      n,
-                                      category.getSelectedItem().toString(),
-                                      "₦" +
-                                              p.replace("₦", ""),
-                                      q,
-                                      l,
-                                      s,
-                                      ph,
-                                      description.getText()
-                                              .toString()
-                                              .trim(),
-                                      existing == null
-                                              ? ""
-                                              : existing.photoUri,
-                                      true
-                              );
-
-                      if (existing == null) {
-                          saveListing(item);
-                      } else {
-                          updateListing(item);
-                      }
-
-                      Toast.makeText(
-                              this,
-                              existing == null
-                                      ? "Listing posted successfully."
-                                      : "Listing updated successfully.",
-                              Toast.LENGTH_LONG
-                      ).show();
-
-                      showMyListings();
-                  });
-
-                  root.addView(save);
-
-                  Button cancel = button("CANCEL");
-
-                  cancel.setOnClickListener(
-                          v -> showMyListings()
-                  );
-
-                  root.addView(cancel);
-
-                  setContentView(scroll);
-              }
-
-              private void saveProfile(
-                      SellerProfile profile
-              ) {
-                  getSharedPreferences(
-                          PREFS,
-                          Context.MODE_PRIVATE
-                  )
-                          .edit()
-                          .putString(
-                                  "profile_name",
-                                  profile.name
-                          )
-                          .putString(
-                                  "profile_farm",
-                                  profile.farmName
-                          )
-                          .putString(
-                                  "profile_phone",
-                                  profile.phone
-                          )
-                          .putString(
-                                  "profile_location",
-                                  profile.location
-                          )
-                          .putString(
-                                  "profile_about",
-                                  profile.about
-                          )
-                          .apply();
-              }
-
-              private SellerProfile getProfile() {
-                  android.content.SharedPreferences prefs =
-                          getSharedPreferences(
-                                  PREFS,
-                                  Context.MODE_PRIVATE
-                          );
-
-                  return new SellerProfile(
-                          prefs.getString(
-                                  "profile_name",
-                                  ""
-                          ),
-                          prefs.getString(
-                                  "profile_farm",
-                                  ""
-                          ),
-                          prefs.getString(
-                                  "profile_phone",
-                                  ""
-                          ),
-                          prefs.getString(
-                                  "profile_location",
-                                  ""
-                          ),
-                          prefs.getString(
-                                  "profile_about",
-                                  ""
-                          )
-                  );
-              }
-
-              private void saveListing(Listing item) {
-                  android.content.SharedPreferences prefs =
-                          getSharedPreferences(
-                                  PREFS,
-                                  Context.MODE_PRIVATE
-                          );
-
-                  JSONArray array;
-
-                  try {
-                      array = new JSONArray(
-                              prefs.getString(
-                                      "listings",
-                                      "[]"
-                              )
-                      );
-                  } catch (Exception e) {
-                      array = new JSONArray();
-                  }
-
-                  array.put(toJson(item));
-
-                  prefs.edit()
-                          .putString(
-                                  "listings",
-                                  array.toString()
-                          )
-                          .apply();
-              }
-
-              private void updateListing(Listing item) {
-                  android.content.SharedPreferences prefs =
-                          getSharedPreferences(
-                                  PREFS,
-                                  Context.MODE_PRIVATE
-                          );
-
-                  JSONArray old;
-
-                  try {
-                      old = new JSONArray(
-                              prefs.getString(
-                                      "listings",
-                                      "[]"
-                              )
-                      );
-                  } catch (Exception e) {
-                      old = new JSONArray();
-                  }
-
-                  JSONArray updated = new JSONArray();
-
-                  for (int i = 0; i < old.length(); i++) {
-                      try {
-                          JSONObject object =
-                                  old.getJSONObject(i);
-
-                          if (
-                                  object.optLong("id") ==
-                                          item.id
-                          ) {
-                              updated.put(toJson(item));
+                      login.isEnabled = false
+                      login.text = "LOGGING IN..."
+
+                      auth.signInWithEmailAndPassword(
+                          emailText,
+                          passwordText
+                      ).addOnCompleteListener { task ->
+
+                          login.isEnabled = true
+                          login.text = "LOGIN"
+
+                          if (task.isSuccessful) {
+                              toast("Login successful.")
+                              showMarketplace()
                           } else {
-                              updated.put(object);
-                          }
-                      } catch (Exception ignored) {
-                      }
-                  }
-
-                  prefs.edit()
-                          .putString(
-                                  "listings",
-                                  updated.toString()
-                          )
-                          .apply();
-              }
-
-              private JSONObject toJson(Listing item) {
-                  JSONObject object = new JSONObject();
-
-                  try {
-                      object.put("id", item.id);
-                      object.put("name", item.name);
-                      object.put("category", item.category);
-                      object.put("price", item.price);
-                      object.put("quantity", item.quantity);
-                      object.put("location", item.location);
-                      object.put("seller", item.seller);
-                      object.put("phone", item.phone);
-                      object.put(
-                              "description",
-                              item.description
-                      );
-                      object.put(
-                              "photoUri",
-                              item.photoUri
-                      );
-                      object.put(
-                              "isMine",
-                              item.isMine
-                      );
-                  } catch (Exception ignored) {
-                  }
-
-                  return object;
-              }
-
-              private List<Listing> getListings() {
-                  List<Listing> result =
-                          new ArrayList<>();
-
-                  android.content.SharedPreferences prefs =
-                          getSharedPreferences(
-                                  PREFS,
-                                  Context.MODE_PRIVATE
-                          );
-
-                  JSONArray array;
-
-                  try {
-                      array = new JSONArray(
-                              prefs.getString(
-                                      "listings",
-                                      "[]"
-                              )
-                      );
-                  } catch (Exception e) {
-                      return result;
-                  }
-
-                  for (int i = 0; i < array.length(); i++) {
-                      try {
-                          JSONObject object =
-                                  array.getJSONObject(i);
-
-                          result.add(
-                                  new Listing(
-                                          object.optLong(
-                                                  "id",
-                                                  i
-                                          ),
-                                          object.optString(
-                                                  "name"
-                                          ),
-                                          object.optString(
-                                                  "category"
-                                          ),
-                                          object.optString(
-                                                  "price"
-                                          ),
-                                          object.optString(
-                                                  "quantity"
-                                          ),
-                                          object.optString(
-                                                  "location"
-                                          ),
-                                          object.optString(
-                                                  "seller"
-                                          ),
-                                          object.optString(
-                                                  "phone"
-                                          ),
-                                          object.optString(
-                                                  "description"
-                                          ),
-                                          object.optString(
-                                                  "photoUri"
-                                          ),
-                                          object.optBoolean(
-                                                  "isMine",
-                                                  false
-                                          )
+                              toast(
+                                  firebaseError(
+                                      task.exception
                                   )
-                          );
-                      } catch (Exception ignored) {
-                      }
-                  }
-
-                  return result;
-              }
-
-              private boolean isFavorite(long id) {
-                  android.content.SharedPreferences prefs =
-                          getSharedPreferences(
-                                  PREFS,
-                                  Context.MODE_PRIVATE
-                          );
-
-                  return prefs.getBoolean(
-                          "favorite_" + id,
-                          false
-                  );
-              }
-
-              private void toggleFavorite(long id) {
-                  android.content.SharedPreferences prefs =
-                          getSharedPreferences(
-                                  PREFS,
-                                  Context.MODE_PRIVATE
-                          );
-
-                  prefs.edit()
-                          .putBoolean(
-                                  "favorite_" + id,
-                                  !isFavorite(id)
-                          )
-                          .apply();
-              }
-
-              private void deleteListing(long id) {
-                  android.content.SharedPreferences prefs =
-                          getSharedPreferences(
-                                  PREFS,
-                                  Context.MODE_PRIVATE
-                          );
-
-                  JSONArray old;
-
-                  try {
-                      old = new JSONArray(
-                              prefs.getString(
-                                      "listings",
-                                      "[]"
                               )
-                      );
-                  } catch (Exception e) {
-                      old = new JSONArray();
-                  }
-
-                  JSONArray updated = new JSONArray();
-
-                  for (int i = 0; i < old.length(); i++) {
-                      try {
-                          JSONObject object =
-                                  old.getJSONObject(i);
-
-                          if (
-                                  object.optLong("id") != id
-                          ) {
-                              updated.put(object);
                           }
-                      } catch (Exception ignored) {
                       }
                   }
 
-                  prefs.edit()
-                          .putString(
-                                  "listings",
-                                  updated.toString()
-                          )
-                          .remove(
-                                  "favorite_" + id
-                          )
-                          .apply();
-              }
+                  root.addView(login)
 
-              private void seedListings() {
-                  android.content.SharedPreferences prefs =
-                          getSharedPreferences(
-                                  PREFS,
-                                  Context.MODE_PRIVATE
-                          );
+                  val forgot =
+                      button("RESET PASSWORD")
 
-                  if (
-                          prefs.getBoolean(
-                                  "seeded",
-                                  false
+                  forgot.setOnClickListener {
+
+                      val emailText =
+                          email.text.toString().trim()
+
+                      if (emailText.isEmpty()) {
+                          toast(
+                              "Enter your email address first."
                           )
-                  ) {
-                      return;
+                          return@setOnClickListener
+                      }
+
+                      auth.sendPasswordResetEmail(
+                          emailText
+                      ).addOnCompleteListener { task ->
+
+                          if (task.isSuccessful) {
+                              toast(
+                                  "Password reset email sent."
+                              )
+                          } else {
+                              toast(
+                                  firebaseError(
+                                      task.exception
+                                  )
+                              )
+                          }
+                      }
                   }
 
-                  saveListing(
-                          new Listing(
-                                  1001L,
-                                  "Healthy Large Pig",
-                                  "Pigs and Piglets",
-                                  "₦250,000",
-                                  "1 pig",
-                                  "Abakaliki, Ebonyi State",
-                                  "John's Pig Farm",
-                                  "08000000000",
-                                  "Healthy mature pig suitable for breeding.",
-                                  "",
-                                  false
-                          )
-                  );
+                  root.addView(forgot)
 
-                  saveListing(
-                          new Listing(
-                                  1002L,
-                                  "Weaner Piglets",
-                                  "Pigs and Piglets",
-                                  "₦85,000",
-                                  "2 piglets",
-                                  "Umuahia, Abia State",
-                                  "Green Valley Farm",
-                                  "08000000001",
-                                  "Healthy weaner piglets.",
-                                  "",
-                                  false
-                          )
-                  );
+                  val register =
+                      button("CREATE NEW ACCOUNT")
 
-                  saveListing(
-                          new Listing(
-                                  1003L,
-                                  "Fresh Catfish",
-                                  "Fish and Aquaculture",
-                                  "₦2,500",
-                                  "10 kg",
-                                  "Abakaliki, Ebonyi State",
-                                  "Ebonyi Fish Farm",
-                                  "08000000002",
-                                  "Fresh farm-raised catfish.",
-                                  "",
-                                  false
-                          )
-                  );
+                  register.setOnClickListener {
+                      showRegister()
+                  }
 
-                  saveListing(
-                          new Listing(
-                                  1004L,
-                                  "Dried Maize",
-                                  "Crops and Farm Produce",
-                                  "₦65,000",
-                                  "100 kg",
-                                  "Abakaliki, Ebonyi State",
-                                  "Agro Best Farm",
-                                  "08000000004",
-                                  "Clean dried maize.",
-                                  "",
-                                  false
-                          )
-                  );
+                  root.addView(register)
 
-                  saveListing(
-                          new Listing(
-                                  1005L,
-                                  "Broiler Chickens",
-                                  "Poultry",
-                                  "₦12,000",
-                                  "10 birds",
-                                  "Umuahia, Abia State",
-                                  "Sunrise Poultry",
-                                  "08000000005",
-                                  "Healthy broiler chickens.",
-                                  "",
-                                  false
-                          )
-                  );
+                  val back =
+                      button("BACK")
 
-                  saveListing(
-                          new Listing(
-                                  1006L,
-                                  "Healthy Goats",
-                                  "Other Livestock",
-                                  "₦120,000",
-                                  "2 goats",
-                                  "Abakaliki, Ebonyi State",
-                                  "Ebony Livestock Farm",
-                                  "08000000006",
-                                  "Healthy goats for sale.",
-                                  "",
-                                  false
-                          )
-                  );
+                  back.setOnClickListener {
+                      showWelcome()
+                  }
 
-                  saveListing(
-                          new Listing(
-                                  1007L,
-                                  "Hybrid Maize Seeds",
-                                  "Seeds and Seedlings",
-                                  "₦18,000",
-                                  "5 kg",
-                                  "Aba, Abia State",
-                                  "Farm Input Centre",
-                                  "08000000007",
-                                  "Quality hybrid maize seeds.",
-                                  "",
-                                  false
-                          )
-                  );
+                  root.addView(back)
 
-                  saveListing(
-                          new Listing(
-                                  1008L,
-                                  "Knapsack Sprayer",
-                                  "Farm Equipment",
-                                  "₦45,000",
-                                  "1 unit",
-                                  "Aba, Abia State",
-                                  "Agro Tools Nigeria",
-                                  "08000000008",
-                                  "Farm spraying equipment.",
-                                  "",
-                                  false
-                          )
-                  );
-
-                  prefs.edit()
-                          .putBoolean(
-                                  "seeded",
-                                  true
-                          )
-                          .apply();
+                  scroll.addView(root)
+                  setContentView(scroll)
               }
 
-              private static class Listing {
-                  long id;
-                  String name;
-                  String category;
-                  String price;
-                  String quantity;
-                  String location;
-                  String seller;
-                  String phone;
-                  String description;
-                  String photoUri;
-                  boolean isMine;
+              private fun showRegister() {
+                  val scroll = ScrollView(this)
+                  val root = base()
 
-                  Listing(
-                          long id,
-                          String name,
-                          String category,
-                          String price,
-                          String quantity,
-                          String location,
-                          String seller,
-                          String phone,
-                          String description,
-                          String photoUri,
-                          boolean isMine
-                  ) {
-                      this.id = id;
-                      this.name = name;
-                      this.category = category;
-                      this.price = price;
-                      this.quantity = quantity;
-                      this.location = location;
-                      this.seller = seller;
-                      this.phone = phone;
-                      this.description = description;
-                      this.photoUri = photoUri;
-                      this.isMine = isMine;
+                  root.addView(title("Create Account"))
+
+                  val name =
+                      field("Full name")
+
+                  val email =
+                      field("Email address")
+
+                  email.inputType =
+                      android.text.InputType.TYPE_CLASS_TEXT or
+                      android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+
+                  val phone =
+                      field("Phone number")
+
+                  val location =
+                      field("Location")
+
+                  val password =
+                      field("Password")
+
+                  password.inputType =
+                      android.text.InputType.TYPE_CLASS_TEXT or
+                      android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+
+                  val confirm =
+                      field("Confirm password")
+
+                  confirm.inputType =
+                      android.text.InputType.TYPE_CLASS_TEXT or
+                      android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+
+                  root.addView(name)
+                  root.addView(email)
+                  root.addView(phone)
+                  root.addView(location)
+                  root.addView(password)
+                  root.addView(confirm)
+
+                  val create =
+                      button(
+                          "CREATE ACCOUNT",
+                          true
+                      )
+
+                  create.setOnClickListener {
+
+                      val nameText =
+                          name.text.toString().trim()
+
+                      val emailText =
+                          email.text.toString().trim()
+
+                      val phoneText =
+                          phone.text.toString().trim()
+
+                      val locationText =
+                          location.text.toString().trim()
+
+                      val passwordText =
+                          password.text.toString()
+
+                      val confirmText =
+                          confirm.text.toString()
+
+                      if (
+                          nameText.isEmpty() ||
+                          emailText.isEmpty() ||
+                          phoneText.isEmpty() ||
+                          locationText.isEmpty() ||
+                          passwordText.isEmpty()
+                      ) {
+                          toast(
+                              "Please complete all required fields."
+                          )
+                          return@setOnClickListener
+                      }
+
+                      if (passwordText.length < 6) {
+                          toast(
+                              "Password must be at least 6 characters."
+                          )
+                          return@setOnClickListener
+                      }
+
+                      if (passwordText != confirmText) {
+                          toast(
+                              "Passwords do not match."
+                          )
+                          return@setOnClickListener
+                      }
+
+                      create.isEnabled = false
+                      create.text = "CREATING ACCOUNT..."
+
+                      auth.createUserWithEmailAndPassword(
+                          emailText,
+                          passwordText
+                      ).addOnCompleteListener { task ->
+
+                          if (!task.isSuccessful) {
+                              create.isEnabled = true
+                              create.text = "CREATE ACCOUNT"
+
+                              toast(
+                                  firebaseError(
+                                      task.exception
+                                  )
+                              )
+
+                              return@addOnCompleteListener
+                          }
+
+                          val user =
+                              auth.currentUser
+
+                          if (user == null) {
+                              create.isEnabled = true
+                              create.text = "CREATE ACCOUNT"
+                              toast(
+                                  "Account was created but could not be opened."
+                              )
+                              return@addOnCompleteListener
+                          }
+
+                          val profile =
+                              hashMapOf(
+                                  "uid" to user.uid,
+                                  "name" to nameText,
+                                  "email" to emailText,
+                                  "phone" to phoneText,
+                                  "location" to locationText,
+                                  "createdAt" to
+                                      com.google.firebase.Timestamp.now()
+                              )
+
+                          db.collection("users")
+                              .document(user.uid)
+                              .set(profile)
+                              .addOnCompleteListener { profileTask ->
+
+                                  create.isEnabled = true
+                                  create.text = "CREATE ACCOUNT"
+
+                                  if (profileTask.isSuccessful) {
+                                      toast(
+                                          "Account created successfully."
+                                      )
+
+                                      showMarketplace()
+                                  } else {
+                                      toast(
+                                          "Account created, but profile could not be saved."
+                                      )
+
+                                      showMarketplace()
+                                  }
+                              }
+                      }
+                  }
+
+                  root.addView(create)
+
+                  val login =
+                      button("I ALREADY HAVE AN ACCOUNT")
+
+                  login.setOnClickListener {
+                      showLogin()
+                  }
+
+                  root.addView(login)
+
+                  val back =
+                      button("BACK")
+
+                  back.setOnClickListener {
+                      showWelcome()
+                  }
+
+                  root.addView(back)
+
+                  scroll.addView(root)
+                  setContentView(scroll)
+              }
+
+              private fun showMarketplace() {
+                  val user = auth.currentUser
+
+                  if (user == null) {
+                      showLogin()
+                      return
+                  }
+
+                  val scroll = ScrollView(this)
+                  val root = base()
+
+                  root.addView(
+                      title("FarmersMeet Marketplace")
+                  )
+
+                  val account =
+                      TextView(this).apply {
+                          text =
+                              "Signed in as:\n${user.email}"
+
+                          textSize = 15f
+                          setTextColor(textColor)
+                          setPadding(0, 0, 0, 15)
+                      }
+
+                  root.addView(account)
+
+                  val profile =
+                      button("MY PROFILE")
+
+                  profile.setOnClickListener {
+                      showProfile()
+                  }
+
+                  root.addView(profile)
+
+                  val listings =
+                      button("BROWSE MARKETPLACE", true)
+
+                  listings.setOnClickListener {
+                      showComingSoon(
+                          "Marketplace listings"
+                      )
+                  }
+
+                  root.addView(listings)
+
+                  val sell =
+                      button("SELL AN ITEM")
+
+                  sell.setOnClickListener {
+                      showComingSoon(
+                          "Selling an item"
+                      )
+                  }
+
+                  root.addView(sell)
+
+                  val favorites =
+                      button("MY FAVORITES")
+
+                  favorites.setOnClickListener {
+                      showComingSoon(
+                          "Favorites"
+                      )
+                  }
+
+                  root.addView(favorites)
+
+                  val logout =
+                      button("LOG OUT")
+
+                  logout.setOnClickListener {
+                      auth.signOut()
+                      showWelcome()
+                  }
+
+                  root.addView(logout)
+
+                  setContentView(root)
+              }
+
+              private fun showProfile() {
+                  val user = auth.currentUser
+
+                  if (user == null) {
+                      showLogin()
+                      return
+                  }
+
+                  val scroll = ScrollView(this)
+                  val root = base()
+
+                  root.addView(title("My Profile"))
+
+                  val name =
+                      field("Full name")
+
+                  val phone =
+                      field("Phone number")
+
+                  val location =
+                      field("Location")
+
+                  root.addView(name)
+                  root.addView(phone)
+                  root.addView(location)
+
+                  db.collection("users")
+                      .document(user.uid)
+                      .get()
+                      .addOnSuccessListener { document ->
+
+                          if (document.exists()) {
+                              name.setText(
+                                  document.getString("name")
+                                      ?: ""
+                              )
+
+                              phone.setText(
+                                  document.getString("phone")
+                                      ?: ""
+                              )
+
+                              location.setText(
+                                  document.getString("location")
+                                      ?: ""
+                              )
+                          }
+                      }
+
+                  val email =
+                      TextView(this).apply {
+                          text =
+                              "Email:\n${user.email}"
+
+                          textSize = 17f
+                          setTextColor(textColor)
+                          setPadding(0, 12, 0, 20)
+                      }
+
+                  root.addView(email)
+
+                  val save =
+                      button(
+                          "SAVE PROFILE",
+                          true
+                      )
+
+                  save.setOnClickListener {
+
+                      val data =
+                          hashMapOf(
+                              "uid" to user.uid,
+                              "name" to
+                                  name.text.toString().trim(),
+                              "email" to
+                                  (user.email ?: ""),
+                              "phone" to
+                                  phone.text.toString().trim(),
+                              "location" to
+                                  location.text.toString().trim()
+                          )
+
+                      save.isEnabled = false
+                      save.text = "SAVING..."
+
+                      db.collection("users")
+                          .document(user.uid)
+                          .set(
+                              data,
+                              com.google.firebase.firestore.SetOptions.merge()
+                          )
+                          .addOnCompleteListener { task ->
+
+                              save.isEnabled = true
+                              save.text = "SAVE PROFILE"
+
+                              if (task.isSuccessful) {
+                                  toast(
+                                      "Profile saved."
+                                  )
+                              } else {
+                                  toast(
+                                      "Could not save profile."
+                                  )
+                              }
+                          }
+                  }
+
+                  root.addView(save)
+
+                  val logout =
+                      button("LOG OUT")
+
+                  logout.setOnClickListener {
+                      auth.signOut()
+                      showWelcome()
+                  }
+
+                  root.addView(logout)
+
+                  val back =
+                      button("BACK TO MARKETPLACE")
+
+                  back.setOnClickListener {
+                      showMarketplace()
+                  }
+
+                  root.addView(back)
+
+                  scroll.addView(root)
+                  setContentView(scroll)
+              }
+
+              private fun showComingSoon(
+                  feature: String
+              ) {
+                  val root = base()
+
+                  root.addView(
+                      title("Stage 10")
+                  )
+
+                  root.addView(
+                      TextView(this).apply {
+                          text =
+                              "$feature will remain connected " +
+                              "to your real Firebase account.\n\n" +
+                              "The Stage 10 authentication system " +
+                              "is active and your account is securely " +
+                              "signed in."
+                          textSize = 18f
+                          setTextColor(textColor)
+                          setPadding(0, 10, 0, 25)
+                      }
+                  )
+
+                  val back =
+                      button("BACK TO MARKETPLACE", true)
+
+                  back.setOnClickListener {
+                      showMarketplace()
+                  }
+
+                  root.addView(back)
+
+                  setContentView(root)
+              }
+
+              private fun firebaseError(
+                  exception: Exception?
+              ): String {
+
+                  val message =
+                      exception?.message ?: ""
+
+                  return when {
+                      message.contains(
+                          "already in use",
+                          ignoreCase = true
+                      ) ->
+                          "That email address is already registered."
+
+                      message.contains(
+                          "badly formatted",
+                          ignoreCase = true
+                      ) ->
+                          "Please enter a valid email address."
+
+                      message.contains(
+                          "password is invalid",
+                          ignoreCase = true
+                      ) ->
+                          "Incorrect email or password."
+
+                      message.contains(
+                          "no user record",
+                          ignoreCase = true
+                      ) ->
+                          "No account was found with those details."
+
+                      message.contains(
+                          "network",
+                          ignoreCase = true
+                      ) ->
+                          "Network error. Check your internet connection."
+
+                      else ->
+                          message.ifEmpty {
+                              "Authentication failed. Please try again."
+                          }
                   }
               }
 
-              private static class SellerProfile {
-                  String name;
-                  String farmName;
-                  String phone;
-                  String location;
-                  String about;
-
-                  SellerProfile(
-                          String name,
-                          String farmName,
-                          String phone,
-                          String location,
-                          String about
-                  ) {
-                      this.name = name;
-                      this.farmName = farmName;
-                      this.phone = phone;
-                      this.location = location;
-                      this.about = about;
-                  }
+              private fun toast(message: String) {
+                  Toast.makeText(
+                      this,
+                      message,
+                      Toast.LENGTH_LONG
+                  ).show()
               }
           }
           EOF
@@ -1771,14 +1100,14 @@ jobs:
             --gradle-version 8.9 \
             --distribution-type bin
 
-          chmod +x gradlew
-
-      - name: Build Stage 9 APK
+      - name: Build Stage 10 debug APK
         shell: bash
         run: |
           set -e
 
           cd FarmersMeet
+
+          chmod +x gradlew
 
           ./gradlew \
             --no-daemon \
@@ -1786,37 +1115,26 @@ jobs:
             clean \
             assembleDebug
 
-      - name: Verify APK exists
+      - name: Verify Stage 10 APK
         shell: bash
         run: |
           set -e
 
           APK="FarmersMeet/app/build/outputs/apk/debug/app-debug.apk"
 
-          if [ ! -f "$APK" ]; then
-            echo "ERROR: APK was not created."
-            exit 1
-          fi
+          test -f "$APK"
 
-          echo "Stage 9 APK successfully created:"
+          echo
+          echo "=========================================="
+          echo "FarmersMeet Stage 10 APK CREATED"
+          echo "=========================================="
+          echo
+
           ls -lh "$APK"
 
-      - name: Verify APK package
-        shell: bash
-        run: |
-          set -e
-
-          APK="FarmersMeet/app/build/outputs/apk/debug/app-debug.apk"
-
-          if command -v aapt >/dev/null 2>&1; then
-            aapt dump badging "$APK" | head -n 20
-          else
-            echo "aapt not directly available; APK existence already verified."
-          fi
-
-      - name: Upload Stage 9 APK
+      - name: Upload Stage 10 APK
         uses: actions/upload-artifact@v4
         with:
-          name: FarmersMeet-Stage-9-APK
+          name: FarmersMeet-Stage-10-APK
           path: FarmersMeet/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
