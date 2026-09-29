@@ -30,55 +30,85 @@ jobs:
         with:
           gradle-version: "8.7"
 
-      - name: Verify actual FarmersMeet source
+      - name: Extract FarmersMeet source
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "Checking repository..."
+          ZIP="FarmersMeet_Nigeria_V2_Full_Source.zip"
+
+          if [ ! -f "$ZIP" ]; then
+            echo "ERROR: $ZIP was not found."
+            echo
+            echo "Repository contents:"
+            find . -maxdepth 3 -type f | sort
+            exit 1
+          fi
+
+          echo "Found source archive:"
+          ls -lh "$ZIP"
+
+          rm -rf FarmersMeet_V2
+
+          unzip -q "$ZIP"
+
+          echo
+          echo "Extracted source:"
+          find FarmersMeet_V2 -maxdepth 3 -type f | sort | head -100
 
           test -d FarmersMeet_V2/android
-          test -f FarmersMeet_V2/android/settings.gradle
-          test -f FarmersMeet_V2/android/build.gradle
-          test -f FarmersMeet_V2/android/app/build.gradle
-          test -f FarmersMeet_V2/android/app/src/main/AndroidManifest.xml
-          test -f FarmersMeet_V2/android/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt
 
-          echo "Actual FarmersMeet Android source found."
+          echo
+          echo "FarmersMeet Android source found."
+
+      - name: Verify Android project
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PROJECT="FarmersMeet_V2/android"
+
+          test -f "$PROJECT/settings.gradle"
+          test -f "$PROJECT/build.gradle"
+          test -f "$PROJECT/app/build.gradle"
+          test -f "$PROJECT/app/src/main/AndroidManifest.xml"
+          test -f "$PROJECT/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt"
+
+          echo "Android project verification PASSED."
 
       - name: Install Firebase configuration
         shell: bash
         run: |
           set -euo pipefail
 
-          mkdir -p FarmersMeet_V2/android/app
+          PROJECT="FarmersMeet_V2/android"
+          mkdir -p "$PROJECT/app"
 
           if [ -f "Settings/google-services.json" ]; then
+
             cp "Settings/google-services.json" \
-              "FarmersMeet_V2/android/app/google-services.json"
+              "$PROJECT/app/google-services.json"
 
           elif [ -f "google-services.json" ]; then
-            cp "google-services.json" \
-              "FarmersMeet_V2/android/app/google-services.json"
 
-          elif [ -f "FarmersMeet_V2/android/app/google-services.json" ]; then
-            echo "Firebase configuration already exists."
+            cp "google-services.json" \
+              "$PROJECT/app/google-services.json"
 
           else
-            echo "ERROR: google-services.json was not found."
+
+            echo "ERROR: Firebase google-services.json was not found."
             echo
-            echo "Expected one of:"
-            echo "  Settings/google-services.json"
-            echo "  google-services.json"
-            echo "  FarmersMeet_V2/android/app/google-services.json"
+            echo "Repository contents:"
+            find . -maxdepth 3 -type f | sort
             exit 1
+
           fi
 
-          test -s FarmersMeet_V2/android/app/google-services.json
+          test -s "$PROJECT/app/google-services.json"
 
           echo "Firebase configuration installed."
 
-      - name: Verify Firebase package
+      - name: Verify Firebase configuration
         shell: bash
         run: |
           set -euo pipefail
@@ -93,13 +123,13 @@ jobs:
 
           data = json.loads(path.read_text())
 
-          expected = "ng.farmersmeet.nigeria"
+          expected_package = "ng.farmersmeet.nigeria"
 
           clients = data.get("client", [])
 
           if not clients:
               raise SystemExit(
-                  "ERROR: google-services.json contains no Android client."
+                  "ERROR: google-services.json contains no Firebase client."
               )
 
           packages = []
@@ -120,24 +150,32 @@ jobs:
           for package_name in packages:
               print(" - " + package_name)
 
-          if expected not in packages:
+          if expected_package not in packages:
               raise SystemExit(
                   "ERROR: Firebase package mismatch.\n"
-                  "Expected: " + expected + "\n"
-                  "Found: " + str(packages)
+                  f"Expected: {expected_package}\n"
+                  f"Found: {packages}"
               )
 
-          print("Firebase package check PASSED.")
+          print("Firebase package verification PASSED.")
           PY
 
-      - name: Configure Gradle for Firebase
+      - name: Configure Firebase Gradle plugin
         shell: bash
         run: |
           set -euo pipefail
 
-          cd FarmersMeet_V2/android
+          PROJECT="FarmersMeet_V2/android"
 
-          cat > settings.gradle <<'EOF'
+          cat > "$PROJECT/build.gradle" <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.6.1' apply false
+              id 'org.jetbrains.kotlin.android' version '2.0.21' apply false
+              id 'com.google.gms.google-services' version '4.4.2' apply false
+          }
+          EOF
+
+          cat > "$PROJECT/settings.gradle" <<'EOF'
           pluginManagement {
               repositories {
                   google()
@@ -160,74 +198,34 @@ jobs:
           include(":app")
           EOF
 
-          cat > build.gradle <<'EOF'
-          plugins {
-              id 'com.android.application' version '8.6.1' apply false
-              id 'org.jetbrains.kotlin.android' version '2.0.21' apply false
-              id 'com.google.gms.google-services' version '4.4.2' apply false
-          }
-          EOF
+          echo "Gradle project configuration prepared."
 
-          cat > app/build.gradle <<'EOF'
-          plugins {
-              id 'com.android.application'
-              id 'org.jetbrains.kotlin.android'
-              id 'com.google.gms.google-services'
-          }
+      - name: Verify application Gradle configuration
+        shell: bash
+        run: |
+          set -euo pipefail
 
-          android {
-              namespace 'ng.farmersmeet.nigeria'
+          PROJECT="FarmersMeet_V2/android"
 
-              compileSdk 35
+          grep -q "com.android.application" \
+            "$PROJECT/app/build.gradle"
 
-              defaultConfig {
-                  applicationId 'ng.farmersmeet.nigeria'
-                  minSdk 24
-                  targetSdk 35
-                  versionCode 10
-                  versionName "10.0"
-              }
+          grep -q "org.jetbrains.kotlin.android" \
+            "$PROJECT/app/build.gradle"
 
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
+          grep -q "com.google.gms.google-services" \
+            "$PROJECT/app/build.gradle"
 
-              kotlinOptions {
-                  jvmTarget = "17"
-              }
+          grep -q "firebase-auth" \
+            "$PROJECT/app/build.gradle"
 
-              buildTypes {
-                  debug {
-                      debuggable true
-                      minifyEnabled false
-                  }
+          grep -q "firebase-firestore" \
+            "$PROJECT/app/build.gradle"
 
-                  release {
-                      minifyEnabled false
-                  }
-              }
-          }
+          grep -q "ng.farmersmeet.nigeria" \
+            "$PROJECT/app/build.gradle"
 
-          dependencies {
-              implementation 'androidx.core:core-ktx:1.15.0'
-              implementation 'androidx.appcompat:appcompat:1.7.0'
-              implementation 'com.google.android.material:material:1.12.0'
-              implementation 'androidx.activity:activity-ktx:1.10.0'
-
-              implementation platform(
-                  'com.google.firebase:firebase-bom:34.19.0'
-              )
-
-              implementation 'com.google.firebase:firebase-auth'
-              implementation 'com.google.firebase:firebase-firestore'
-              implementation 'com.google.firebase:firebase-storage'
-
-              implementation 'com.paystack.android:paystack-ui:0.0.9'
-          }
-          EOF
-
-          echo "Gradle configuration written."
+          echo "Application Gradle configuration PASSED."
 
       - name: Create Gradle wrapper
         shell: bash
@@ -242,23 +240,38 @@ jobs:
 
           chmod +x gradlew
 
-          test -f gradlew
+          test -x gradlew
 
-          echo "Gradle wrapper created successfully."
+          echo "Gradle wrapper created."
 
-      - name: Verify Gradle project
+      - name: Check Gradle version
         shell: bash
         run: |
           set -euo pipefail
 
           cd FarmersMeet_V2/android
 
-          ./gradlew \
-            --no-daemon \
-            --stacktrace \
-            :app:tasks
+          ./gradlew --version
 
-      - name: Build Stage 10 debug APK
+      - name: Check Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "ANDROID_HOME=${ANDROID_HOME:-}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-}"
+
+          if [ -z "${ANDROID_HOME:-}" ]; then
+            echo "ERROR: ANDROID_HOME is not configured."
+            exit 1
+          fi
+
+          test -d "$ANDROID_HOME/platforms/android-35"
+          test -d "$ANDROID_HOME/build-tools/35.0.0"
+
+          echo "Android SDK 35 is available."
+
+      - name: Build FarmersMeet Stage 10
         shell: bash
         run: |
           set -euo pipefail
@@ -271,23 +284,35 @@ jobs:
             clean \
             :app:assembleDebug
 
-      - name: Verify Stage 10 APK
+      - name: Verify APK
         shell: bash
         run: |
           set -euo pipefail
 
           APK="FarmersMeet_V2/android/app/build/outputs/apk/debug/app-debug.apk"
 
+          if [ ! -f "$APK" ]; then
+            echo "ERROR: APK was not generated."
+            echo
+            echo "Available APK files:"
+            find FarmersMeet_V2/android/app/build \
+              -type f \
+              -name "*.apk" \
+              -print || true
+            exit 1
+          fi
+
           if [ ! -s "$APK" ]; then
-              echo "ERROR: Stage 10 APK was not generated."
-              exit 1
+            echo "ERROR: APK exists but is empty."
+            exit 1
           fi
 
           echo
           echo "=========================================="
-          echo " FARMERSMEET STAGE 10 APK SUCCESSFULLY BUILT"
+          echo " FARMERSMEET STAGE 10 APK BUILT"
           echo "=========================================="
           echo
+
           ls -lh "$APK"
 
       - name: Upload Stage 10 APK
