@@ -19,7 +19,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java 17
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -30,107 +30,70 @@ jobs:
         with:
           gradle-version: "8.7"
 
-      - name: Extract FarmersMeet source
+      - name: Extract actual FarmersMeet source
         shell: bash
         run: |
           set -euo pipefail
 
           ZIP="FarmersMeet_Nigeria_V2_Full_Source.zip"
 
-          if [ ! -f "$ZIP" ]; then
-            echo "ERROR: $ZIP was not found."
-            echo
-            echo "Repository contents:"
-            find . -maxdepth 3 -type f | sort
-            exit 1
-          fi
-
-          echo "Found source archive:"
-          ls -lh "$ZIP"
+          test -f "$ZIP"
 
           rm -rf FarmersMeet_V2
 
           unzip -q "$ZIP"
 
-          echo
-          echo "Extracted source:"
-          find FarmersMeet_V2 -maxdepth 3 -type f | sort | head -100
-
           test -d FarmersMeet_V2/android
+          test -f FarmersMeet_V2/android/settings.gradle
+          test -f FarmersMeet_V2/android/build.gradle
+          test -f FarmersMeet_V2/android/app/build.gradle
+          test -f FarmersMeet_V2/android/app/src/main/AndroidManifest.xml
+          test -f FarmersMeet_V2/android/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt
 
-          echo
-          echo "FarmersMeet Android source found."
-
-      - name: Verify Android project
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          PROJECT="FarmersMeet_V2/android"
-
-          test -f "$PROJECT/settings.gradle"
-          test -f "$PROJECT/build.gradle"
-          test -f "$PROJECT/app/build.gradle"
-          test -f "$PROJECT/app/src/main/AndroidManifest.xml"
-          test -f "$PROJECT/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt"
-
-          echo "Android project verification PASSED."
+          echo "Actual FarmersMeet Android project found."
 
       - name: Install Firebase configuration
         shell: bash
         run: |
           set -euo pipefail
 
-          PROJECT="FarmersMeet_V2/android"
-          mkdir -p "$PROJECT/app"
+          mkdir -p FarmersMeet_V2/android/app
 
           if [ -f "Settings/google-services.json" ]; then
-
             cp "Settings/google-services.json" \
-              "$PROJECT/app/google-services.json"
+              "FarmersMeet_V2/android/app/google-services.json"
 
           elif [ -f "google-services.json" ]; then
-
             cp "google-services.json" \
-              "$PROJECT/app/google-services.json"
+              "FarmersMeet_V2/android/app/google-services.json"
 
           else
-
-            echo "ERROR: Firebase google-services.json was not found."
+            echo "ERROR: google-services.json was not found."
             echo
-            echo "Repository contents:"
-            find . -maxdepth 3 -type f | sort
+            echo "The Firebase configuration must be present in the repository."
             exit 1
-
           fi
 
-          test -s "$PROJECT/app/google-services.json"
+          test -s FarmersMeet_V2/android/app/google-services.json
 
           echo "Firebase configuration installed."
 
-      - name: Verify Firebase configuration
+      - name: Verify Firebase package
         shell: bash
         run: |
           set -euo pipefail
 
           python3 - <<'PY'
           import json
-          from pathlib import Path
 
-          path = Path(
-              "FarmersMeet_V2/android/app/google-services.json"
-          )
+          path = "FarmersMeet_V2/android/app/google-services.json"
 
-          data = json.loads(path.read_text())
+          with open(path, "r", encoding="utf-8") as f:
+              data = json.load(f)
 
-          expected_package = "ng.farmersmeet.nigeria"
+          expected = "ng.farmersmeet.nigeria"
 
           clients = data.get("client", [])
-
-          if not clients:
-              raise SystemExit(
-                  "ERROR: google-services.json contains no Firebase client."
-              )
 
           packages = []
 
@@ -145,22 +108,20 @@ jobs:
               if package_name:
                   packages.append(package_name)
 
-          print("Firebase Android package(s):")
-
+          print("Firebase packages found:")
           for package_name in packages:
-              print(" - " + package_name)
+              print("  " + package_name)
 
-          if expected_package not in packages:
+          if expected not in packages:
               raise SystemExit(
-                  "ERROR: Firebase package mismatch.\n"
-                  f"Expected: {expected_package}\n"
-                  f"Found: {packages}"
+                  "Firebase package mismatch. "
+                  f"Expected {expected}, found {packages}"
               )
 
-          print("Firebase package verification PASSED.")
+          print("Firebase package verification passed.")
           PY
 
-      - name: Configure Firebase Gradle plugin
+      - name: Configure Google Services plugin
         shell: bash
         run: |
           set -euo pipefail
@@ -175,32 +136,43 @@ jobs:
           }
           EOF
 
-          cat > "$PROJECT/settings.gradle" <<'EOF'
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path(
+              "FarmersMeet_V2/android/app/build.gradle"
+          )
+
+          text = path.read_text()
+
+          if "com.google.gms.google-services" not in text:
+              text = text.replace(
+                  "id 'org.jetbrains.kotlin.android'\n",
+                  "id 'org.jetbrains.kotlin.android'\n"
+                  "    id 'com.google.gms.google-services'\n"
+              )
+
+          if "compileOptions" not in text:
+              text += """
+
+          android {
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+
+              kotlinOptions {
+                  jvmTarget = '17'
               }
           }
+          """
 
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+          path.write_text(text)
+          PY
 
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
+          echo "Google Services plugin configured."
 
-          rootProject.name = "FarmersMeetNigeria"
-
-          include(":app")
-          EOF
-
-          echo "Gradle project configuration prepared."
-
-      - name: Verify application Gradle configuration
+      - name: Verify Gradle configuration
         shell: bash
         run: |
           set -euo pipefail
@@ -208,10 +180,10 @@ jobs:
           PROJECT="FarmersMeet_V2/android"
 
           grep -q "com.android.application" \
-            "$PROJECT/app/build.gradle"
+            "$PROJECT/build.gradle"
 
-          grep -q "org.jetbrains.kotlin.android" \
-            "$PROJECT/app/build.gradle"
+          grep -q "com.google.gms.google-services" \
+            "$PROJECT/build.gradle"
 
           grep -q "com.google.gms.google-services" \
             "$PROJECT/app/build.gradle"
@@ -222,63 +194,35 @@ jobs:
           grep -q "firebase-firestore" \
             "$PROJECT/app/build.gradle"
 
+          grep -q "firebase-storage" \
+            "$PROJECT/app/build.gradle"
+
           grep -q "ng.farmersmeet.nigeria" \
             "$PROJECT/app/build.gradle"
 
-          echo "Application Gradle configuration PASSED."
+          echo "Gradle configuration verified."
 
-      - name: Create Gradle wrapper
+      - name: Show Gradle and Android environment
         shell: bash
         run: |
           set -euo pipefail
 
-          cd FarmersMeet_V2/android
+          gradle --version
 
-          gradle wrapper \
-            --gradle-version 8.7 \
-            --distribution-type bin
-
-          chmod +x gradlew
-
-          test -x gradlew
-
-          echo "Gradle wrapper created."
-
-      - name: Check Gradle version
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          cd FarmersMeet_V2/android
-
-          ./gradlew --version
-
-      - name: Check Android SDK
-        shell: bash
-        run: |
-          set -euo pipefail
-
+          echo
           echo "ANDROID_HOME=${ANDROID_HOME:-}"
           echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-}"
 
-          if [ -z "${ANDROID_HOME:-}" ]; then
-            echo "ERROR: ANDROID_HOME is not configured."
-            exit 1
-          fi
+          test -n "${ANDROID_HOME:-}"
+          test -d "$ANDROID_HOME"
 
-          test -d "$ANDROID_HOME/platforms/android-35"
-          test -d "$ANDROID_HOME/build-tools/35.0.0"
-
-          echo "Android SDK 35 is available."
-
-      - name: Build FarmersMeet Stage 10
+      - name: Build Stage 10 APK
+        working-directory: FarmersMeet_V2/android
         shell: bash
         run: |
           set -euo pipefail
 
-          cd FarmersMeet_V2/android
-
-          ./gradlew \
+          gradle \
             --no-daemon \
             --stacktrace \
             clean \
@@ -291,21 +235,7 @@ jobs:
 
           APK="FarmersMeet_V2/android/app/build/outputs/apk/debug/app-debug.apk"
 
-          if [ ! -f "$APK" ]; then
-            echo "ERROR: APK was not generated."
-            echo
-            echo "Available APK files:"
-            find FarmersMeet_V2/android/app/build \
-              -type f \
-              -name "*.apk" \
-              -print || true
-            exit 1
-          fi
-
-          if [ ! -s "$APK" ]; then
-            echo "ERROR: APK exists but is empty."
-            exit 1
-          fi
+          test -s "$APK"
 
           echo
           echo "=========================================="
