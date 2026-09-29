@@ -16,16 +16,16 @@ jobs:
 
     steps:
 
-      # ---------------------------------------------------------
+      # ==========================================================
       # 1. CHECKOUT
-      # ---------------------------------------------------------
+      # ==========================================================
       - name: Checkout repository
         uses: actions/checkout@v4
 
 
-      # ---------------------------------------------------------
+      # ==========================================================
       # 2. JAVA 17
-      # ---------------------------------------------------------
+      # ==========================================================
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -34,176 +34,200 @@ jobs:
           cache: gradle
 
 
-      # ---------------------------------------------------------
+      # ==========================================================
       # 3. ANDROID SDK
-      #
-      # IMPORTANT:
-      # We do NOT call sdkmanager before this step.
-      # setup-android installs the command-line tools and
-      # places sdkmanager on PATH.
-      # ---------------------------------------------------------
+      # ==========================================================
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
-          packages: >-
+          packages: |
             platform-tools
             platforms;android-35
             build-tools;35.0.0
 
 
-      # ---------------------------------------------------------
-      # 4. VERIFY SDK
-      # ---------------------------------------------------------
+      # ==========================================================
+      # 4. VERIFY ANDROID SDK
+      # ==========================================================
       - name: Verify Android SDK
         shell: bash
         run: |
           set -e
 
           echo "=========================================="
-          echo "ANDROID SDK CHECK"
+          echo "ANDROID SDK"
           echo "=========================================="
 
           echo "ANDROID_HOME=${ANDROID_HOME:-not-set}"
           echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-not-set}"
 
           echo
-          echo "sdkmanager location:"
+          echo "sdkmanager:"
           command -v sdkmanager
-
-          echo
-          echo "sdkmanager version:"
           sdkmanager --version
 
           echo
-          echo "ADB location:"
+          echo "adb:"
           command -v adb
-
-          echo
-          echo "ADB version:"
           adb version
 
           echo
-          echo "Installed Android platforms:"
+          echo "Android platforms:"
           ls -la "$ANDROID_SDK_ROOT/platforms"
 
           echo
-          echo "Installed Android build tools:"
+          echo "Android build tools:"
           ls -la "$ANDROID_SDK_ROOT/build-tools"
+
+
+      # ==========================================================
+      # 5. VERIFY ROOT ANDROID PROJECT
+      # ==========================================================
+      - name: Verify project files
+        shell: bash
+        run: |
+          set -e
+
+          echo "=========================================="
+          echo "REPOSITORY CONTENTS"
+          echo "=========================================="
+
+          find . -maxdepth 3 -type f | sort
 
           echo
           echo "=========================================="
-          echo "ANDROID SDK CHECK PASSED"
+          echo "CHECKING ROOT GRADLE PROJECT"
           echo "=========================================="
 
+          test -f settings.gradle
+          test -f app/build.gradle
+          test -d app
 
-      # ---------------------------------------------------------
-      # 5. CHECK FARMERSMEET PROJECT
-      # ---------------------------------------------------------
-      - name: Check FarmersMeet project
-        shell: bash
-        run: |
-          set -e
-
-          if [ ! -d "FarmersMeet" ]; then
-            echo "ERROR: FarmersMeet directory was not found."
-            echo
-            echo "Repository contents:"
-            find . -maxdepth 2 -type f | sort
-            exit 1
-          fi
-
-          if [ ! -f "FarmersMeet/settings.gradle" ] &&
-             [ ! -f "FarmersMeet/settings.gradle.kts" ]; then
-            echo "ERROR: FarmersMeet Gradle settings file was not found."
-            exit 1
-          fi
-
-          if [ ! -d "FarmersMeet/app" ]; then
-            echo "ERROR: FarmersMeet/app directory was not found."
-            exit 1
-          fi
-
-          echo "FarmersMeet project found."
+          echo "Root Gradle project found."
 
 
-      # ---------------------------------------------------------
-      # 6. CHECK FIREBASE CONFIGURATION
-      # ---------------------------------------------------------
-      - name: Check Firebase configuration
-        shell: bash
-        run: |
-          set -e
-
-          if [ ! -f "FarmersMeet/app/google-services.json" ]; then
-            echo "ERROR: Firebase configuration file is missing:"
-            echo "FarmersMeet/app/google-services.json"
-            echo
-            echo "Download google-services.json from your Firebase"
-            echo "Android app settings and place it in:"
-            echo
-            echo "FarmersMeet/app/google-services.json"
-            exit 1
-          fi
-
-          echo "Firebase google-services.json found."
-
-
-      # ---------------------------------------------------------
-      # 7. SHOW PROJECT STRUCTURE
-      # ---------------------------------------------------------
-      - name: Show project structure
+      # ==========================================================
+      # 6. PREPARE FIREBASE CONFIGURATION
+      # ==========================================================
+      - name: Prepare Firebase configuration
         shell: bash
         run: |
           set -e
 
           echo "=========================================="
-          echo "FARMERSMEET PROJECT"
+          echo "FIREBASE CONFIGURATION"
           echo "=========================================="
 
-          find FarmersMeet \
-            -maxdepth 4 \
-            -type f \
-            \( \
-              -name "*.gradle" \
-              -o -name "*.gradle.kts" \
-              -o -name "AndroidManifest.xml" \
-              -o -name "google-services.json" \
-              -o -name "gradlew" \
-            \) \
-            -print | sort
+          if [ -f "app/google-services.json" ]; then
+            echo "Firebase file already exists at:"
+            echo "app/google-services.json"
+
+          elif [ -f "Settings/google-services.json" ]; then
+            echo "Firebase file found in Settings/."
+            echo "Copying it to app/google-services.json..."
+
+            cp "Settings/google-services.json" \
+               "app/google-services.json"
+
+          else
+            echo "ERROR: google-services.json was not found."
+            echo
+            echo "Checked:"
+            echo "  app/google-services.json"
+            echo "  Settings/google-services.json"
+            exit 1
+          fi
+
+          echo
+          echo "Firebase configuration ready."
+
+          ls -lh app/google-services.json
 
 
-      # ---------------------------------------------------------
-      # 8. MAKE GRADLE WRAPPER EXECUTABLE
-      # ---------------------------------------------------------
-      - name: Prepare Gradle wrapper
+      # ==========================================================
+      # 7. CHECK GOOGLE SERVICES PLUGIN
+      # ==========================================================
+      - name: Verify Google Services Gradle plugin
         shell: bash
         run: |
           set -e
 
-          cd FarmersMeet
+          echo "=========================================="
+          echo "GOOGLE SERVICES PLUGIN"
+          echo "=========================================="
 
-          if [ ! -f "gradlew" ]; then
-            echo "ERROR: Gradle wrapper was not found."
-            echo "Expected: FarmersMeet/gradlew"
-            exit 1
+          grep -n "google-services" settings.gradle || true
+          grep -n "google-services" app/build.gradle || true
+
+          echo
+          echo "Gradle files:"
+          echo "---------------- settings.gradle ----------------"
+          cat settings.gradle
+
+          echo
+          echo "---------------- app/build.gradle ---------------"
+          cat app/build.gradle
+
+
+      # ==========================================================
+      # 8. FIND GRADLE WRAPPER
+      # ==========================================================
+      - name: Prepare Gradle
+        shell: bash
+        run: |
+          set -e
+
+          echo "=========================================="
+          echo "GRADLE WRAPPER"
+          echo "=========================================="
+
+          if [ -f "./gradlew" ]; then
+            echo "Gradle wrapper found."
+
+            chmod +x ./gradlew
+
+          else
+            echo "Gradle wrapper not found."
+            echo "Generating Gradle wrapper..."
+
+            gradle wrapper \
+              --gradle-version 8.9 \
+              --distribution-type bin
+
+            chmod +x ./gradlew
           fi
 
-          chmod +x gradlew
-
-          echo "Gradle wrapper:"
+          echo
+          echo "Gradle version:"
           ./gradlew --version
 
 
-      # ---------------------------------------------------------
-      # 9. CLEAN BUILD
-      # ---------------------------------------------------------
+      # ==========================================================
+      # 9. CHECK GRADLE TASKS
+      # ==========================================================
+      - name: Check Gradle tasks
+        shell: bash
+        run: |
+          set -e
+
+          echo "=========================================="
+          echo "AVAILABLE GRADLE TASKS"
+          echo "=========================================="
+
+          ./gradlew \
+            --no-daemon \
+            --stacktrace \
+            tasks \
+            --all
+
+
+      # ==========================================================
+      # 10. CLEAN
+      # ==========================================================
       - name: Clean project
         shell: bash
         run: |
           set -e
-
-          cd FarmersMeet
 
           ./gradlew \
             --no-daemon \
@@ -211,15 +235,17 @@ jobs:
             clean
 
 
-      # ---------------------------------------------------------
-      # 10. BUILD STAGE 10 DEBUG APK
-      # ---------------------------------------------------------
-      - name: Build Stage 10 APK
+      # ==========================================================
+      # 11. BUILD DEBUG APK
+      # ==========================================================
+      - name: Build Stage 10 debug APK
         shell: bash
         run: |
           set -e
 
-          cd FarmersMeet
+          echo "=========================================="
+          echo "BUILDING FARMERSMEET STAGE 10"
+          echo "=========================================="
 
           ./gradlew \
             --no-daemon \
@@ -227,40 +253,46 @@ jobs:
             assembleDebug
 
 
-      # ---------------------------------------------------------
-      # 11. VERIFY APK
-      # ---------------------------------------------------------
-      - name: Verify Stage 10 APK
+      # ==========================================================
+      # 12. VERIFY APK
+      # ==========================================================
+      - name: Verify APK
         shell: bash
         run: |
           set -e
 
-          APK="FarmersMeet/app/build/outputs/apk/debug/app-debug.apk"
+          echo "=========================================="
+          echo "SEARCHING FOR APK"
+          echo "=========================================="
+
+          find app/build \
+            -type f \
+            -name "*.apk" \
+            -print
+
+          APK="app/build/outputs/apk/debug/app-debug.apk"
 
           if [ ! -f "$APK" ]; then
-            echo "ERROR: APK was not produced."
             echo
-            echo "Build output:"
-            find FarmersMeet/app/build \
-              -type f \
-              -name "*.apk" \
-              -print 2>/dev/null || true
+            echo "ERROR: Expected APK was not created:"
+            echo "$APK"
             exit 1
           fi
 
           echo
           echo "=========================================="
-          echo "STAGE 10 APK CREATED"
+          echo "APK SUCCESSFULLY CREATED"
           echo "=========================================="
+
           ls -lh "$APK"
 
 
-      # ---------------------------------------------------------
-      # 12. UPLOAD APK
-      # ---------------------------------------------------------
+      # ==========================================================
+      # 13. UPLOAD APK
+      # ==========================================================
       - name: Upload FarmersMeet Stage 10 APK
         uses: actions/upload-artifact@v4
         with:
           name: FarmersMeet-Stage-10-APK
-          path: FarmersMeet/app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
