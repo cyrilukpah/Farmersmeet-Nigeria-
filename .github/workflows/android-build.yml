@@ -3,11 +3,13 @@ name: FarmersMeet Stage 8 APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,31 +25,52 @@ jobs:
         with:
           gradle-version: '8.10'
 
-      - name: Verify existing FarmersMeet project
+      - name: Find FarmersMeet Android project
         shell: bash
         run: |
-          set -e
-          test -f FarmersMeet/settings.gradle
-          test -f FarmersMeet/build.gradle
-          test -f FarmersMeet/app/build.gradle
-          test -f FarmersMeet/app/src/main/AndroidManifest.xml
-          test -f FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt
-          echo "Existing FarmersMeet project verified."
+          echo "Repository contents:"
+          find . -maxdepth 4 -type f | sort | head -200
 
-      - name: Build Stage 8 APK
-        working-directory: FarmersMeet
-        run: gradle :app:assembleDebug --stacktrace
+          if [ -f "FarmersMeet/settings.gradle" ]; then
+            echo "PROJECT_DIR=FarmersMeet" >> "$GITHUB_ENV"
+          elif [ -f "settings.gradle" ] && [ -f "app/build.gradle" ]; then
+            echo "PROJECT_DIR=." >> "$GITHUB_ENV"
+          else
+            echo "ERROR: Android project could not be found."
+            exit 1
+          fi
+
+      - name: Verify project
+        shell: bash
+        run: |
+          echo "Using project: $PROJECT_DIR"
+          test -f "$PROJECT_DIR/settings.gradle"
+          test -f "$PROJECT_DIR/app/build.gradle"
+          test -f "$PROJECT_DIR/app/src/main/AndroidManifest.xml"
+          test -f "$PROJECT_DIR/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt"
+          echo "FarmersMeet project verified."
+
+      - name: Build APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          gradle :app:assembleDebug --stacktrace
 
       - name: Verify APK
         shell: bash
         run: |
-          set -e
-          test -s FarmersMeet/app/build/outputs/apk/debug/app-debug.apk
-          echo "FarmersMeet Stage 8 APK created successfully."
+          APK="$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk"
+
+          if [ ! -s "$APK" ]; then
+            echo "ERROR: APK was not created."
+            exit 1
+          fi
+
+          echo "APK successfully created:"
+          ls -lh "$APK"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: FarmersMeet-Stage8-APK
-          path: FarmersMeet/app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
