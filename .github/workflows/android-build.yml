@@ -1,4 +1,4 @@
-name: FarmersMeet Stage 7 APK
+name: FarmersMeet Stage 8 APK
 
 on:
   workflow_dispatch:
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build:
-    name: Build FarmersMeet Stage 7
+    name: Build FarmersMeet Stage 8
     runs-on: ubuntu-latest
 
     steps:
@@ -39,7 +39,7 @@ jobs:
             "platforms;android-35" \
             "build-tools;35.0.0"
 
-      - name: Create clean FarmersMeet project
+      - name: Create FarmersMeet Stage 8 project
         shell: bash
         run: |
           set -e
@@ -98,8 +98,8 @@ jobs:
                   applicationId 'ng.farmersmeet.nigeria'
                   minSdk 24
                   targetSdk 35
-                  versionCode 8
-                  versionName "8.0"
+                  versionCode 9
+                  versionName "9.0"
               }
 
               buildTypes {
@@ -215,6 +215,14 @@ jobs:
               val isMine: Boolean
           )
 
+          data class SellerProfile(
+              val name: String,
+              val farmName: String,
+              val phone: String,
+              val location: String,
+              val about: String
+          )
+
           class MainActivity : AppCompatActivity() {
 
               private val green = Color.rgb(23, 107, 53)
@@ -235,12 +243,15 @@ jobs:
 
               private var selectedPhotoUri: Uri? = null
               private var selectedPhotoView: ImageView? = null
+              private var editingId: Long? = null
 
               private val photoPicker =
                   registerForActivityResult(
                       ActivityResultContracts.OpenDocument()
                   ) { uri: Uri? ->
+
                       if (uri != null) {
+
                           try {
                               contentResolver.takePersistableUriPermission(
                                   uri,
@@ -287,20 +298,24 @@ jobs:
                   value: String,
                   yellowButton: Boolean = false
               ): Button {
+
                   return Button(this).apply {
                       text = value
                       textSize = 15f
+
                       setTypeface(
                           null,
                           android.graphics.Typeface.BOLD
                       )
 
                       setTextColor(
-                          if (yellowButton) textColor else Color.WHITE
+                          if (yellowButton) textColor
+                          else Color.WHITE
                       )
 
                       setBackgroundColor(
-                          if (yellowButton) yellow else green
+                          if (yellowButton) yellow
+                          else green
                       )
 
                       layoutParams =
@@ -314,10 +329,13 @@ jobs:
               }
 
               private fun showHome() {
+
                   val root = baseLayout()
+
                   root.gravity = Gravity.CENTER
 
                   val logo = heading("FarmersMeet")
+
                   logo.textSize = 40f
                   logo.gravity = Gravity.CENTER
 
@@ -345,6 +363,7 @@ jobs:
               }
 
               private fun showMarketplace() {
+
                   val scroll = ScrollView(this)
                   val root = baseLayout()
 
@@ -366,11 +385,6 @@ jobs:
                       textSize = 16f
                       setSingleLine(true)
                       setTextColor(textColor)
-                      layoutParams =
-                          LinearLayout.LayoutParams(
-                              LinearLayout.LayoutParams.MATCH_PARENT,
-                              LinearLayout.LayoutParams.WRAP_CONTENT
-                          )
                   }
 
                   root.addView(search)
@@ -385,6 +399,15 @@ jobs:
                   }
 
                   root.addView(searchButton)
+
+                  val profile =
+                      makeButton("MY SELLER PROFILE")
+
+                  profile.setOnClickListener {
+                      showSellerProfile()
+                  }
+
+                  root.addView(profile)
 
                   val favorites =
                       makeButton("❤️ MY FAVORITES")
@@ -419,7 +442,9 @@ jobs:
                   root.addView(categoryTitle)
 
                   categories.forEach { category ->
-                      val button = makeButton(category)
+
+                      val button =
+                          makeButton(category)
 
                       button.setOnClickListener {
                           showListings(category)
@@ -432,25 +457,138 @@ jobs:
                       makeButton("SELL AN ITEM", true)
 
                   sell.setOnClickListener {
-                      showSell()
+                      showSell(null)
                   }
 
                   root.addView(sell)
+
+                  scroll.addView(root)
+
+                  setContentView(scroll)
+              }
+
+              private fun showSellerProfile() {
+
+                  val profile = getProfile()
+
+                  val scroll = ScrollView(this)
+                  val root = baseLayout()
+
+                  root.addView(
+                      heading("My Seller Profile")
+                  )
+
+                  val name =
+                      field("Your name")
+                  name.setText(profile.name)
+
+                  val farm =
+                      field("Farm / Business name")
+                  farm.setText(profile.farmName)
+
+                  val phone =
+                      field("Phone number")
+                  phone.setText(profile.phone)
+
+                  val location =
+                      field("Farm / Business location")
+                  location.setText(profile.location)
+
+                  val about =
+                      field("About your farm or business")
+                  about.setText(profile.about)
+                  about.minLines = 5
+                  about.gravity = Gravity.TOP
+
+                  root.addView(name)
+                  root.addView(farm)
+                  root.addView(phone)
+                  root.addView(location)
+                  root.addView(about)
+
+                  val save =
+                      makeButton(
+                          "SAVE SELLER PROFILE",
+                          true
+                      )
+
+                  save.setOnClickListener {
+
+                      if (
+                          name.text.toString().trim().isEmpty() ||
+                          farm.text.toString().trim().isEmpty() ||
+                          phone.text.toString().trim().isEmpty()
+                      ) {
+
+                          Toast.makeText(
+                              this,
+                              "Please provide your name, farm/business name and phone.",
+                              Toast.LENGTH_LONG
+                          ).show()
+
+                          return@setOnClickListener
+                      }
+
+                      saveProfile(
+                          SellerProfile(
+                              name.text.toString().trim(),
+                              farm.text.toString().trim(),
+                              phone.text.toString().trim(),
+                              location.text.toString().trim(),
+                              about.text.toString().trim()
+                          )
+                      )
+
+                      Toast.makeText(
+                          this,
+                          "Seller profile saved.",
+                          Toast.LENGTH_SHORT
+                      ).show()
+
+                      showMarketplace()
+                  }
+
+                  root.addView(save)
+
+                  val listings =
+                      makeButton("VIEW MY LISTINGS")
+
+                  listings.setOnClickListener {
+                      showMyListings()
+                  }
+
+                  root.addView(listings)
+
+                  val back =
+                      makeButton("BACK TO MARKETPLACE")
+
+                  back.setOnClickListener {
+                      showMarketplace()
+                  }
+
+                  root.addView(back)
 
                   scroll.addView(root)
                   setContentView(scroll)
               }
 
               private fun showListings(category: String) {
+
                   val results =
                       getListings()
-                          .filter { it.category == category }
+                          .filter {
+                              it.category == category
+                          }
                           .reversed()
 
-                  showListingPage(category, results)
+                  showListingPage(
+                      category,
+                      results
+                  )
               }
 
               private fun showSearchResults(query: String) {
+
                   val lower = query.lowercase()
 
                   val results =
@@ -458,6 +596,7 @@ jobs:
                           getListings()
                       } else {
                           getListings().filter {
+
                               it.name.lowercase().contains(lower) ||
                               it.category.lowercase().contains(lower) ||
                               it.location.lowercase().contains(lower) ||
@@ -466,16 +605,21 @@ jobs:
                       }
 
                   showListingPage(
-                      if (query.isEmpty()) "All Listings"
-                      else "Search: $query",
+                      if (query.isEmpty())
+                          "All Listings"
+                      else
+                          "Search: $query",
                       results.reversed()
                   )
               }
 
               private fun showFavorites() {
+
                   val favorites =
                       getListings()
-                          .filter { isFavorite(it.id) }
+                          .filter {
+                              isFavorite(it.id)
+                          }
                           .reversed()
 
                   showListingPage(
@@ -485,63 +629,121 @@ jobs:
               }
 
               private fun showMyListings() {
+
                   val mine =
                       getListings()
-                          .filter { it.isMine }
+                          .filter {
+                              it.isMine
+                          }
                           .reversed()
 
-                  showListingPage(
-                      "My Listings",
-                      mine,
-                      true
-                  )
-              }
-
-              private fun showListingPage(
-                  pageTitle: String,
-                  results: List<Listing>,
-                  mineOnly: Boolean = false
-              ) {
                   val scroll = ScrollView(this)
                   val root = baseLayout()
 
-                  root.addView(heading(pageTitle))
+                  root.addView(
+                      heading("My Listings")
+                  )
 
-                  if (results.isEmpty()) {
-                      val empty = TextView(this).apply {
-                          text =
-                              if (mineOnly)
+                  if (mine.isEmpty()) {
+
+                      root.addView(
+                          TextView(this).apply {
+                              text =
                                   "You have not posted any listings yet."
-                              else
-                                  "No listings found."
+                              textSize = 18f
+                              setTextColor(textColor)
+                              setPadding(0, 20, 0, 30)
+                          }
+                      )
 
-                          textSize = 18f
-                          setTextColor(textColor)
-                          setPadding(0, 20, 0, 30)
-                      }
-
-                      root.addView(empty)
                   } else {
-                      results.forEach { listing ->
+
+                      mine.forEach {
                           addListingCard(
                               root,
-                              listing,
-                              mineOnly
+                              it,
+                              true
                           )
                       }
                   }
 
                   val sell =
-                      makeButton("SELL AN ITEM", true)
+                      makeButton(
+                          "SELL AN ITEM",
+                          true
+                      )
 
                   sell.setOnClickListener {
-                      showSell()
+                      showSell(null)
                   }
 
                   root.addView(sell)
 
                   val back =
-                      makeButton("BACK TO MARKETPLACE")
+                      makeButton(
+                          "BACK TO MARKETPLACE"
+                      )
+
+                  back.setOnClickListener {
+                      showMarketplace()
+                  }
+
+                  root.addView(back)
+
+                  scroll.addView(root)
+                  setContentView(scroll)
+              }
+
+              private fun showListingPage(
+                  pageTitle: String,
+                  results: List<Listing>
+              ) {
+
+                  val scroll = ScrollView(this)
+                  val root = baseLayout()
+
+                  root.addView(
+                      heading(pageTitle)
+                  )
+
+                  if (results.isEmpty()) {
+
+                      root.addView(
+                          TextView(this).apply {
+                              text = "No listings found."
+                              textSize = 18f
+                              setTextColor(textColor)
+                              setPadding(0, 20, 0, 30)
+                          }
+                      )
+
+                  } else {
+
+                      results.forEach {
+                          addListingCard(
+                              root,
+                              it,
+                              false
+                          )
+                      }
+                  }
+
+                  val sell =
+                      makeButton(
+                          "SELL AN ITEM",
+                          true
+                      )
+
+                  sell.setOnClickListener {
+                      showSell(null)
+                  }
+
+                  root.addView(sell)
+
+                  val back =
+                      makeButton(
+                          "BACK TO MARKETPLACE"
+                      )
 
                   back.setOnClickListener {
                       showMarketplace()
@@ -558,12 +760,16 @@ jobs:
                   listing: Listing,
                   mineOnly: Boolean
               ) {
+
                   val card =
                       LinearLayout(this).apply {
+
                           orientation =
                               LinearLayout.VERTICAL
 
-                          setBackgroundColor(Color.WHITE)
+                          setBackgroundColor(
+                              Color.WHITE
+                          )
 
                           setPadding(
                               16,
@@ -587,8 +793,11 @@ jobs:
                       }
 
                   if (listing.photoUri.isNotEmpty()) {
+
                       try {
-                          val image = ImageView(this)
+
+                          val image =
+                              ImageView(this)
 
                           image.layoutParams =
                               LinearLayout.LayoutParams(
@@ -600,15 +809,18 @@ jobs:
                               ImageView.ScaleType.CENTER_CROP
 
                           image.setImageURI(
-                              Uri.parse(listing.photoUri)
+                              Uri.parse(
+                                  listing.photoUri
+                              )
                           )
 
                           card.addView(image)
+
                       } catch (_: Exception) {
                       }
                   }
 
-                  val name =
+                  card.addView(
                       TextView(this).apply {
                           text = listing.name
                           textSize = 21f
@@ -619,10 +831,9 @@ jobs:
                           )
                           setPadding(0, 8, 0, 4)
                       }
+                  )
 
-                  card.addView(name)
-
-                  val price =
+                  card.addView(
                       TextView(this).apply {
                           text = listing.price
                           textSize = 20f
@@ -632,10 +843,9 @@ jobs:
                               android.graphics.Typeface.BOLD
                           )
                       }
+                  )
 
-                  card.addView(price)
-
-                  val info =
+                  card.addView(
                       TextView(this).apply {
                           text =
                               "Quantity: ${listing.quantity}\n" +
@@ -646,8 +856,7 @@ jobs:
                           setTextColor(textColor)
                           setPadding(0, 5, 0, 8)
                       }
-
-                  card.addView(info)
+                  )
 
                   val favorite =
                       makeButton(
@@ -658,41 +867,74 @@ jobs:
                       )
 
                   favorite.setOnClickListener {
-                      toggleFavorite(listing.id)
+
+                      toggleFavorite(
+                          listing.id
+                      )
 
                       favorite.text =
                           if (isFavorite(listing.id))
                               "❤️ REMOVE FAVORITE"
                           else
                               "♡ SAVE FAVORITE"
-
-                      Toast.makeText(
-                          this,
-                          if (isFavorite(listing.id))
-                              "Added to favorites."
-                          else
-                              "Removed from favorites.",
-                          Toast.LENGTH_SHORT
-                      ).show()
                   }
 
                   card.addView(favorite)
 
-                  val view =
-                      makeButton("VIEW DETAILS")
+                  val details =
+                      makeButton(
+                          "VIEW DETAILS"
+                      )
 
-                  view.setOnClickListener {
+                  details.setOnClickListener {
                       showDetails(listing)
                   }
 
-                  card.addView(view)
+                  card.addView(details)
 
-                  if (mineOnly && listing.isMine) {
+                  if (!listing.isMine) {
+
+                      val seller =
+                          makeButton(
+                              "VIEW SELLER PROFILE"
+                          )
+
+                      seller.setOnClickListener {
+                          showPublicSellerProfile(
+                              listing.seller
+                          )
+                      }
+
+                      card.addView(seller)
+                  }
+
+                  if (
+                      mineOnly &&
+                      listing.isMine
+                  ) {
+
+                      val edit =
+                          makeButton(
+                              "EDIT LISTING",
+                              true
+                          )
+
+                      edit.setOnClickListener {
+                          showSell(listing)
+                      }
+
+                      card.addView(edit)
+
                       val delete =
-                          makeButton("DELETE LISTING")
+                          makeButton(
+                              "DELETE LISTING"
+                          )
 
                       delete.setOnClickListener {
-                          deleteListing(listing.id)
+
+                          deleteListing(
+                              listing.id
+                          )
 
                           Toast.makeText(
                               this,
@@ -709,17 +951,165 @@ jobs:
                   root.addView(card)
               }
 
-              private fun showDetails(
-                  listing: Listing
+              private fun showPublicSellerProfile(
+                  sellerName: String
               ) {
+
+                  val profile =
+                      getProfileForSeller(
+                          sellerName
+                      )
+
+                  val listings =
+                      getListings()
+                          .filter {
+                              it.seller.equals(
+                                  sellerName,
+                                  ignoreCase = true
+                              )
+                          }
+                          .reversed()
+
                   val scroll = ScrollView(this)
                   val root = baseLayout()
 
-                  root.addView(heading(listing.name))
+                  root.addView(
+                      heading(
+                          profile.farmName.ifEmpty {
+                              sellerName
+                          }
+                      )
+                  )
+
+                  root.addView(
+                      TextView(this).apply {
+                          text =
+                              "SELLER\n${profile.name}\n\n" +
+                              "PHONE\n${profile.phone}\n\n" +
+                              "LOCATION\n${profile.location}\n\n" +
+                              "ABOUT\n" +
+                              profile.about.ifEmpty {
+                                  "No profile description provided."
+                              }
+
+                          textSize = 17f
+                          setTextColor(textColor)
+                          setPadding(
+                              0,
+                              5,
+                              0,
+                              20
+                          )
+                      }
+                  )
+
+                  root.addView(
+                      TextView(this).apply {
+                          text =
+                              "OTHER LISTINGS"
+                          textSize = 21f
+                          setTextColor(green)
+                          setTypeface(
+                              null,
+                              android.graphics.Typeface.BOLD
+                          )
+                          setPadding(
+                              0,
+                              10,
+                              0,
+                              10
+                          )
+                      }
+                  )
+
+                  listings.forEach {
+                      addListingCard(
+                          root,
+                          it,
+                          false
+                      )
+                  }
+
+                  val call =
+                      makeButton(
+                          "CALL SELLER",
+                          true
+                      )
+
+                  call.setOnClickListener {
+
+                      if (profile.phone.isNotEmpty()) {
+
+                          startActivity(
+                              Intent(
+                                  Intent.ACTION_DIAL,
+                                  Uri.parse(
+                                      "tel:${profile.phone}"
+                                  )
+                              )
+                          )
+                      }
+                  }
+
+                  root.addView(call)
+
+                  val back =
+                      makeButton(
+                          "BACK"
+                      )
+
+                  back.setOnClickListener {
+                      showMarketplace()
+                  }
+
+                  root.addView(back)
+
+                  scroll.addView(root)
+                  setContentView(scroll)
+              }
+
+              private fun getProfileForSeller(
+                  seller: String
+              ): SellerProfile {
+
+                  val saved =
+                      getProfile()
+
+                  if (
+                      saved.name.equals(
+                          seller,
+                          ignoreCase = true
+                      )
+                  ) {
+                      return saved
+                  }
+
+                  return SellerProfile(
+                      seller,
+                      seller,
+                      "",
+                      "",
+                      ""
+                  )
+              }
+
+              private fun showDetails(
+                  listing: Listing
+              ) {
+
+                  val scroll = ScrollView(this)
+                  val root = baseLayout()
+
+                  root.addView(
+                      heading(listing.name)
+                  )
 
                   if (listing.photoUri.isNotEmpty()) {
+
                       try {
-                          val image = ImageView(this)
+
+                          val image =
+                              ImageView(this)
 
                           image.layoutParams =
                               LinearLayout.LayoutParams(
@@ -731,16 +1121,20 @@ jobs:
                               ImageView.ScaleType.CENTER_CROP
 
                           image.setImageURI(
-                              Uri.parse(listing.photoUri)
+                              Uri.parse(
+                                  listing.photoUri
+                              )
                           )
 
                           root.addView(image)
+
                       } catch (_: Exception) {
                       }
                   }
 
-                  val details =
+                  root.addView(
                       TextView(this).apply {
+
                           text =
                               "PRICE\n${listing.price}\n\n" +
                               "CATEGORY\n${listing.category}\n\n" +
@@ -749,17 +1143,20 @@ jobs:
                               "SELLER\n${listing.seller}\n\n" +
                               "PHONE\n${listing.phone}\n\n" +
                               "DESCRIPTION\n" +
-                              if (listing.description.isEmpty())
+                              listing.description.ifEmpty {
                                   "No description provided."
-                              else
-                                  listing.description
+                              }
 
                           textSize = 17f
                           setTextColor(textColor)
-                          setPadding(0, 15, 0, 15)
+                          setPadding(
+                              0,
+                              15,
+                              0,
+                              15
+                          )
                       }
-
-                  root.addView(details)
+                  )
 
                   val favorite =
                       makeButton(
@@ -770,7 +1167,10 @@ jobs:
                       )
 
                   favorite.setOnClickListener {
-                      toggleFavorite(listing.id)
+
+                      toggleFavorite(
+                          listing.id
+                      )
 
                       favorite.text =
                           if (isFavorite(listing.id))
@@ -782,16 +1182,17 @@ jobs:
                   root.addView(favorite)
 
                   val call =
-                      makeButton("CALL SELLER", true)
+                      makeButton(
+                          "CALL SELLER",
+                          true
+                      )
 
                   call.setOnClickListener {
-                      if (listing.phone.isEmpty()) {
-                          Toast.makeText(
-                              this,
-                              "No phone number provided.",
-                              Toast.LENGTH_SHORT
-                          ).show()
-                      } else {
+
+                      if (
+                          listing.phone.isNotEmpty()
+                      ) {
+
                           startActivity(
                               Intent(
                                   Intent.ACTION_DIAL,
@@ -806,20 +1207,26 @@ jobs:
                   root.addView(call)
 
                   val whatsapp =
-                      makeButton("WHATSAPP SELLER")
+                      makeButton(
+                          "WHATSAPP SELLER"
+                      )
 
                   whatsapp.setOnClickListener {
-                      if (listing.phone.isEmpty()) {
-                          Toast.makeText(
-                              this,
-                              "No phone number provided.",
-                              Toast.LENGTH_SHORT
-                          ).show()
-                      } else {
+
+                      if (
+                          listing.phone.isNotEmpty()
+                      ) {
+
                           val clean =
                               listing.phone
-                                  .replace("+", "")
-                                  .replace(" ", "")
+                                  .replace(
+                                      "+",
+                                      ""
+                                  )
+                                  .replace(
+                                      " ",
+                                      ""
+                                  )
 
                           val message =
                               "Hello, I saw your ${listing.name} listing on FarmersMeet."
@@ -842,17 +1249,29 @@ jobs:
                   root.addView(whatsapp)
 
                   if (listing.isMine) {
+
+                      val edit =
+                          makeButton(
+                              "EDIT LISTING",
+                              true
+                          )
+
+                      edit.setOnClickListener {
+                          showSell(listing)
+                      }
+
+                      root.addView(edit)
+
                       val delete =
-                          makeButton("DELETE LISTING")
+                          makeButton(
+                              "DELETE LISTING"
+                          )
 
                       delete.setOnClickListener {
-                          deleteListing(listing.id)
 
-                          Toast.makeText(
-                              this,
-                              "Listing deleted.",
-                              Toast.LENGTH_SHORT
-                          ).show()
+                          deleteListing(
+                              listing.id
+                          )
 
                           showMyListings()
                       }
@@ -861,35 +1280,53 @@ jobs:
                   }
 
                   val back =
-                      makeButton("BACK TO LISTINGS")
+                      makeButton(
+                          "BACK"
+                      )
 
                   back.setOnClickListener {
-                      showListings(listing.category)
+                      showListings(
+                          listing.category
+                      )
                   }
 
                   root.addView(back)
-
-                  val market =
-                      makeButton("MARKETPLACE", true)
-
-                  market.setOnClickListener {
-                      showMarketplace()
-                  }
-
-                  root.addView(market)
 
                   scroll.addView(root)
                   setContentView(scroll)
               }
 
-              private fun showSell() {
-                  selectedPhotoUri = null
+              private fun showSell(
+                  existing: Listing?
+              ) {
+
+                  editingId =
+                      existing?.id
+
+                  selectedPhotoUri =
+                      if (
+                          existing?.photoUri?.isNotEmpty() == true
+                      ) {
+                          Uri.parse(
+                              existing.photoUri
+                          )
+                      } else {
+                          null
+                      }
+
                   selectedPhotoView = null
 
                   val scroll = ScrollView(this)
                   val root = baseLayout()
 
-                  root.addView(heading("Sell an Item"))
+                  root.addView(
+                      heading(
+                          if (existing == null)
+                              "Sell an Item"
+                          else
+                              "Edit Listing"
+                      )
+                  )
 
                   val category =
                       Spinner(this)
@@ -901,23 +1338,22 @@ jobs:
                           categories
                       )
 
+                  if (existing != null) {
+
+                      val index =
+                          categories.indexOf(
+                              existing.category
+                          )
+
+                      if (index >= 0) {
+                          category.setSelection(index)
+                      }
+                  }
+
                   root.addView(category)
 
-                  val photoTitle =
-                      TextView(this).apply {
-                          text = "Product Photo"
-                          textSize = 18f
-                          setTextColor(green)
-                          setTypeface(
-                              null,
-                              android.graphics.Typeface.BOLD
-                          )
-                          setPadding(0, 15, 0, 5)
-                      }
-
-                  root.addView(photoTitle)
-
-                  val photo = ImageView(this)
+                  val photo =
+                      ImageView(this)
 
                   photo.layoutParams =
                       LinearLayout.LayoutParams(
@@ -928,34 +1364,123 @@ jobs:
                   photo.scaleType =
                       ImageView.ScaleType.CENTER_CROP
 
-                  photo.setBackgroundColor(Color.LTGRAY)
+                  photo.setBackgroundColor(
+                      Color.LTGRAY
+                  )
 
-                  photo.visibility = ImageView.GONE
+                  if (
+                      selectedPhotoUri != null
+                  ) {
 
-                  selectedPhotoView = photo
+                      photo.setImageURI(
+                          selectedPhotoUri
+                      )
+
+                      photo.visibility =
+                          ImageView.VISIBLE
+
+                  } else {
+
+                      photo.visibility =
+                          ImageView.GONE
+                  }
+
+                  selectedPhotoView =
+                      photo
+
                   root.addView(photo)
 
-                  val choosePhoto =
-                      makeButton("CHOOSE PHOTO", true)
+                  val choose =
+                      makeButton(
+                          "CHOOSE PHOTO",
+                          true
+                      )
 
-                  choosePhoto.setOnClickListener {
+                  choose.setOnClickListener {
+
                       photoPicker.launch(
                           arrayOf("image/*")
                       )
                   }
 
-                  root.addView(choosePhoto)
+                  root.addView(choose)
 
-                  val name = field("Product name")
-                  val price = field("Price in Naira")
-                  val quantity = field("Quantity")
-                  val location = field("Location")
-                  val seller = field("Seller name")
-                  val phone = field("Phone number")
-                  val description = field("Description")
+                  val name =
+                      field("Product name")
+
+                  val price =
+                      field("Price in Naira")
+
+                  val quantity =
+                      field("Quantity")
+
+                  val location =
+                      field("Location")
+
+                  val seller =
+                      field("Seller name")
+
+                  val phone =
+                      field("Phone number")
+
+                  val description =
+                      field("Description")
 
                   description.minLines = 4
-                  description.gravity = Gravity.TOP
+                  description.gravity =
+                      Gravity.TOP
+
+                  if (existing != null) {
+
+                      name.setText(
+                          existing.name
+                      )
+
+                      price.setText(
+                          existing.price
+                              .replace(
+                                  "₦",
+                                  ""
+                              )
+                      )
+
+                      quantity.setText(
+                          existing.quantity
+                      )
+
+                      location.setText(
+                          existing.location
+                      )
+
+                      seller.setText(
+                          existing.seller
+                      )
+
+                      phone.setText(
+                          existing.phone
+                      )
+
+                      description.setText(
+                          existing.description
+                      )
+
+                  } else {
+
+                      val profile =
+                          getProfile()
+
+                      seller.setText(
+                          profile.name
+                      )
+
+                      phone.setText(
+                          profile.phone
+                      )
+
+                      location.setText(
+                          profile.location
+                      )
+                  }
 
                   root.addView(name)
                   root.addView(price)
@@ -965,10 +1490,17 @@ jobs:
                   root.addView(phone)
                   root.addView(description)
 
-                  val post =
-                      makeButton("POST LISTING", true)
+                  val save =
+                      makeButton(
+                          if (existing == null)
+                              "POST LISTING"
+                          else
+                              "SAVE CHANGES",
+                          true
+                      )
 
-                  post.setOnClickListener {
+                  save.setOnClickListener {
+
                       if (
                           name.text.toString().trim().isEmpty() ||
                           price.text.toString().trim().isEmpty() ||
@@ -977,52 +1509,71 @@ jobs:
                           seller.text.toString().trim().isEmpty() ||
                           phone.text.toString().trim().isEmpty()
                       ) {
+
                           Toast.makeText(
                               this,
                               "Please complete the required fields.",
-                              Toast.LENGTH_SHORT
+                              Toast.LENGTH_LONG
                           ).show()
 
                           return@setOnClickListener
                       }
 
+                      val id =
+                          existing?.id
+                              ?: System.currentTimeMillis()
+
                       val listing =
                           Listing(
-                              System.currentTimeMillis(),
+                              id,
                               name.text.toString().trim(),
                               category.selectedItem.toString(),
                               "₦" +
-                                  price.text.toString().trim(),
+                                  price.text.toString().trim()
+                                      .removePrefix("₦"),
                               quantity.text.toString().trim(),
                               location.text.toString().trim(),
                               seller.text.toString().trim(),
                               phone.text.toString().trim(),
                               description.text.toString().trim(),
-                              selectedPhotoUri?.toString() ?: "",
+                              selectedPhotoUri?.toString()
+                                  ?: existing?.photoUri
+                                  ?: "",
                               true
                           )
 
-                      saveListing(listing)
+                      if (existing == null) {
+                          saveListing(listing)
+                      } else {
+                          updateListing(listing)
+                      }
 
                       Toast.makeText(
                           this,
-                          "Listing posted successfully!",
+                          if (existing == null)
+                              "Listing posted successfully!"
+                          else
+                              "Listing updated successfully!",
                           Toast.LENGTH_LONG
                       ).show()
 
-                      showListings(listing.category)
+                      editingId = null
+
+                      showMyListings()
                   }
 
-                  root.addView(post)
+                  root.addView(save)
 
-                  val back =
-                      makeButton("BACK TO MARKETPLACE")
+                  val cancel =
+                      makeButton(
+                          "CANCEL"
+                      )
 
-                  back.setOnClickListener {
-                      showMarketplace()
+                  cancel.setOnClickListener {
+                      showMyListings()
                   }
 
-                  root.addView(back)
+                  root.addView(cancel)
 
                   scroll.addView(root)
                   setContentView(scroll)
@@ -1031,7 +1582,9 @@ jobs:
               private fun field(
                   hintValue: String
               ): EditText {
+
                   return EditText(this).apply {
+
                       hint = hintValue
                       textSize = 16f
                       setTextColor(textColor)
@@ -1041,14 +1594,91 @@ jobs:
                               LinearLayout.LayoutParams.MATCH_PARENT,
                               LinearLayout.LayoutParams.WRAP_CONTENT
                           ).apply {
-                              setMargins(0, 5, 0, 5)
+                              setMargins(
+                                  0,
+                                  5,
+                                  0,
+                                  5
+                              )
                           }
                   }
+              }
+
+              private fun saveProfile(
+                  profile: SellerProfile
+              ) {
+
+                  val prefs =
+                      getSharedPreferences(
+                          "farmersmeet",
+                          Context.MODE_PRIVATE
+                      )
+
+                  prefs.edit()
+                      .putString(
+                          "profile_name",
+                          profile.name
+                      )
+                      .putString(
+                          "profile_farm",
+                          profile.farmName
+                      )
+                      .putString(
+                          "profile_phone",
+                          profile.phone
+                      )
+                      .putString(
+                          "profile_location",
+                          profile.location
+                      )
+                      .putString(
+                          "profile_about",
+                          profile.about
+                      )
+                      .apply()
+              }
+
+              private fun getProfile():
+                  SellerProfile {
+
+                  val prefs =
+                      getSharedPreferences(
+                          "farmersmeet",
+                          Context.MODE_PRIVATE
+                      )
+
+                  return SellerProfile(
+                      prefs.getString(
+                          "profile_name",
+                          ""
+                      ) ?: "",
+
+                      prefs.getString(
+                          "profile_farm",
+                          ""
+                      ) ?: "",
+
+                      prefs.getString(
+                          "profile_phone",
+                          ""
+                      ) ?: "",
+
+                      prefs.getString(
+                          "profile_location",
+                          ""
+                      ) ?: "",
+
+                      prefs.getString(
+                          "profile_about",
+                          ""
+                      ) ?: ""
+                  )
               }
 
               private fun saveListing(
                   listing: Listing
               ) {
+
                   val prefs =
                       getSharedPreferences(
                           "farmersmeet",
@@ -1063,21 +1693,11 @@ jobs:
                           ) ?: "[]"
                       )
 
-                  val item = JSONObject()
-
-                  item.put("id", listing.id)
-                  item.put("name", listing.name)
-                  item.put("category", listing.category)
-                  item.put("price", listing.price)
-                  item.put("quantity", listing.quantity)
-                  item.put("location", listing.location)
-                  item.put("seller", listing.seller)
-                  item.put("phone", listing.phone)
-                  item.put("description", listing.description)
-                  item.put("photoUri", listing.photoUri)
-                  item.put("isMine", listing.isMine)
-
-                  array.put(item)
+                  array.put(
+                      listingToJson(
+                          listing
+                      )
+                  )
 
                   prefs.edit()
                       .putString(
@@ -1087,7 +1707,88 @@ jobs:
                       .apply()
               }
 
-              private fun getListings(): List<Listing> {
+              private fun updateListing(
+                  listing: Listing
+              ) {
+
+                  val prefs =
+                      getSharedPreferences(
+                          "farmersmeet",
+                          Context.MODE_PRIVATE
+                      )
+
+                  val old =
+                      JSONArray(
+                          prefs.getString(
+                              "listings",
+                              "[]"
+                          ) ?: "[]"
+                      )
+
+                  val updated =
+                      JSONArray()
+
+                  for (
+                      i in 0 until old.length()
+                  ) {
+
+                      val item =
+                          old.getJSONObject(i)
+
+                      if (
+                          item.optLong("id") ==
+                          listing.id
+                      ) {
+                          updated.put(
+                              listingToJson(
+                                  listing
+                              )
+                          )
+                      } else {
+                          updated.put(item)
+                      }
+                  }
+
+                  prefs.edit()
+                      .putString(
+                          "listings",
+                          updated.toString()
+                      )
+                      .apply()
+              }
+
+              private fun listingToJson(
+                  listing: Listing
+              ): JSONObject {
+
+                  return JSONObject().apply {
+
+                      put("id", listing.id)
+                      put("name", listing.name)
+                      put("category", listing.category)
+                      put("price", listing.price)
+                      put("quantity", listing.quantity)
+                      put("location", listing.location)
+                      put("seller", listing.seller)
+                      put("phone", listing.phone)
+                      put(
+                          "description",
+                          listing.description
+                      )
+                      put(
+                          "photoUri",
+                          listing.photoUri
+                      )
+                      put(
+                          "isMine",
+                          listing.isMine
+                      )
+                  }
+              }
+
+              private fun getListings():
+                  List<Listing> {
+
                   val prefs =
                       getSharedPreferences(
                           "farmersmeet",
@@ -1105,7 +1806,10 @@ jobs:
                   val result =
                       mutableListOf<Listing>()
 
-                  for (i in 0 until array.length()) {
+                  for (
+                      i in 0 until array.length()
+                  ) {
+
                       val item =
                           array.getJSONObject(i)
 
@@ -1115,15 +1819,33 @@ jobs:
                                   "id",
                                   i.toLong()
                               ),
-                              item.optString("name"),
-                              item.optString("category"),
-                              item.optString("price"),
-                              item.optString("quantity"),
-                              item.optString("location"),
-                              item.optString("seller"),
-                              item.optString("phone"),
-                              item.optString("description"),
-                              item.optString("photoUri"),
+                              item.optString(
+                                  "name"
+                              ),
+                              item.optString(
+                                  "category"
+                              ),
+                              item.optString(
+                                  "price"
+                              ),
+                              item.optString(
+                                  "quantity"
+                              ),
+                              item.optString(
+                                  "location"
+                              ),
+                              item.optString(
+                                  "seller"
+                              ),
+                              item.optString(
+                                  "phone"
+                              ),
+                              item.optString(
+                                  "description"
+                              ),
+                              item.optString(
+                                  "photoUri"
+                              ),
                               item.optBoolean(
                                   "isMine",
                                   false
@@ -1138,6 +1860,7 @@ jobs:
               private fun isFavorite(
                   id: Long
               ): Boolean {
+
                   val prefs =
                       getSharedPreferences(
                           "farmersmeet",
@@ -1158,6 +1881,7 @@ jobs:
               private fun toggleFavorite(
                   id: Long
               ) {
+
                   val prefs =
                       getSharedPreferences(
                           "farmersmeet",
@@ -1171,9 +1895,12 @@ jobs:
                       )?.toMutableSet()
                           ?: mutableSetOf()
 
-                  val key = id.toString()
+                  val key =
+                      id.toString()
 
-                  if (favorites.contains(key)) {
+                  if (
+                      favorites.contains(key)
+                  ) {
                       favorites.remove(key)
                   } else {
                       favorites.add(key)
@@ -1190,6 +1917,7 @@ jobs:
               private fun deleteListing(
                   id: Long
               ) {
+
                   val prefs =
                       getSharedPreferences(
                           "farmersmeet",
@@ -1204,13 +1932,19 @@ jobs:
                           ) ?: "[]"
                       )
 
-                  val newArray = JSONArray()
+                  val newArray =
+                      JSONArray()
 
-                  for (i in 0 until array.length()) {
+                  for (
+                      i in 0 until array.length()
+                  ) {
+
                       val item =
                           array.getJSONObject(i)
 
-                      if (item.optLong("id") != id) {
+                      if (
+                          item.optLong("id") != id
+                      ) {
                           newArray.put(item)
                       }
                   }
@@ -1222,7 +1956,9 @@ jobs:
                       )?.toMutableSet()
                           ?: mutableSetOf()
 
-                  favorites.remove(id.toString())
+                  favorites.remove(
+                      id.toString()
+                  )
 
                   prefs.edit()
                       .putString(
@@ -1237,6 +1973,7 @@ jobs:
               }
 
               private fun seedListings() {
+
                   val prefs =
                       getSharedPreferences(
                           "farmersmeet",
@@ -1254,6 +1991,7 @@ jobs:
 
                   val samples =
                       listOf(
+
                           Listing(
                               1001L,
                               "Healthy Large Pig",
@@ -1407,29 +2145,37 @@ jobs:
           test -f FarmersMeet/app/src/main/res/values/themes.xml
           test -f FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt
 
-          echo "All FarmersMeet Stage 7 source files are present."
+          echo "FarmersMeet Stage 8 source files are present."
 
       - name: Generate Gradle wrapper
         working-directory: FarmersMeet
         shell: bash
         run: |
           set -e
-          gradle wrapper --gradle-version 8.10.2 --distribution-type bin
+
+          gradle wrapper \
+            --gradle-version 8.10.2 \
+            --distribution-type bin
 
       - name: Check Gradle environment
         working-directory: FarmersMeet
         shell: bash
         run: |
           set -e
+
           ./gradlew --version
+
           ./gradlew :app:tasks --all >/dev/null
 
-      - name: Build FarmersMeet Stage 7 APK
+      - name: Build FarmersMeet Stage 8 APK
         working-directory: FarmersMeet
         shell: bash
         run: |
           set -e
-          ./gradlew clean :app:assembleDebug --stacktrace --no-daemon
+
+          ./gradlew clean :app:assembleDebug \
+            --stacktrace \
+            --no-daemon
 
       - name: Verify APK exists
         shell: bash
@@ -1472,10 +2218,10 @@ jobs:
           echo
           echo "Launcher APK verification PASSED."
 
-      - name: Upload FarmersMeet Stage 7 APK
+      - name: Upload FarmersMeet Stage 8 APK
         uses: actions/upload-artifact@v4
         with:
-          name: FarmersMeet-Stage7-APK
+          name: FarmersMeet-Stage8-APK
           path: FarmersMeet/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
