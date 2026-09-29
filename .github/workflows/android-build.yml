@@ -1,4 +1,4 @@
-name: FarmersMeet Stage 10 APK
+name: FarmersMeet Stage 10 - Firebase Build
 
 on:
   workflow_dispatch:
@@ -16,9 +16,16 @@ jobs:
 
     steps:
 
+      # ---------------------------------------------------------
+      # 1. CHECKOUT
+      # ---------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
+
+      # ---------------------------------------------------------
+      # 2. JAVA 17
+      # ---------------------------------------------------------
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -26,949 +33,187 @@ jobs:
           java-version: "17"
           cache: gradle
 
+
+      # ---------------------------------------------------------
+      # 3. ANDROID SDK
+      #
+      # IMPORTANT:
+      # We do NOT call sdkmanager before this step.
+      # setup-android installs the command-line tools and
+      # places sdkmanager on PATH.
+      # ---------------------------------------------------------
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          packages: >-
+            platform-tools
+            platforms;android-35
+            build-tools;35.0.0
 
-      - name: Install Android SDK 35
-        shell: bash
-        run: |
-          set -e
 
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-
-          command -v sdkmanager
-
-          sdkmanager --version
-
-          yes | sdkmanager --licenses >/dev/null || true
-
-          sdkmanager \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
-
+      # ---------------------------------------------------------
+      # 4. VERIFY SDK
+      # ---------------------------------------------------------
       - name: Verify Android SDK
         shell: bash
         run: |
           set -e
 
+          echo "=========================================="
+          echo "ANDROID SDK CHECK"
+          echo "=========================================="
+
+          echo "ANDROID_HOME=${ANDROID_HOME:-not-set}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-not-set}"
+
+          echo
+          echo "sdkmanager location:"
           command -v sdkmanager
 
-          test -d "$ANDROID_HOME"
+          echo
+          echo "sdkmanager version:"
+          sdkmanager --version
 
-          test -d "$ANDROID_HOME/platforms/android-35"
+          echo
+          echo "ADB location:"
+          command -v adb
 
-          test -d "$ANDROID_HOME/build-tools/35.0.0"
+          echo
+          echo "ADB version:"
+          adb version
 
-          echo "Android SDK verification successful."
+          echo
+          echo "Installed Android platforms:"
+          ls -la "$ANDROID_SDK_ROOT/platforms"
 
-      - name: Find Firebase configuration
+          echo
+          echo "Installed Android build tools:"
+          ls -la "$ANDROID_SDK_ROOT/build-tools"
+
+          echo
+          echo "=========================================="
+          echo "ANDROID SDK CHECK PASSED"
+          echo "=========================================="
+
+
+      # ---------------------------------------------------------
+      # 5. CHECK FARMERSMEET PROJECT
+      # ---------------------------------------------------------
+      - name: Check FarmersMeet project
         shell: bash
         run: |
           set -e
 
-          echo "Searching for google-services.json..."
-
-          if [ -f "google-services.json" ]; then
-            cp "google-services.json" /tmp/google-services.json
-
-          elif [ -f "app/google-services.json" ]; then
-            cp "app/google-services.json" /tmp/google-services.json
-
-          elif [ -f "android/app/google-services.json" ]; then
-            cp "android/app/google-services.json" /tmp/google-services.json
-
-          else
-            echo "ERROR: google-services.json was not found."
+          if [ ! -d "FarmersMeet" ]; then
+            echo "ERROR: FarmersMeet directory was not found."
             echo
-            echo "Checked:"
-            echo "  google-services.json"
-            echo "  app/google-services.json"
-            echo "  android/app/google-services.json"
+            echo "Repository contents:"
+            find . -maxdepth 2 -type f | sort
             exit 1
           fi
 
-          test -f /tmp/google-services.json
+          if [ ! -f "FarmersMeet/settings.gradle" ] &&
+             [ ! -f "FarmersMeet/settings.gradle.kts" ]; then
+            echo "ERROR: FarmersMeet Gradle settings file was not found."
+            exit 1
+          fi
 
-          echo "Firebase configuration found."
+          if [ ! -d "FarmersMeet/app" ]; then
+            echo "ERROR: FarmersMeet/app directory was not found."
+            exit 1
+          fi
 
-      - name: Verify Firebase package
+          echo "FarmersMeet project found."
+
+
+      # ---------------------------------------------------------
+      # 6. CHECK FIREBASE CONFIGURATION
+      # ---------------------------------------------------------
+      - name: Check Firebase configuration
         shell: bash
         run: |
           set -e
 
-          python3 - <<'PY'
-          import json
+          if [ ! -f "FarmersMeet/app/google-services.json" ]; then
+            echo "ERROR: Firebase configuration file is missing:"
+            echo "FarmersMeet/app/google-services.json"
+            echo
+            echo "Download google-services.json from your Firebase"
+            echo "Android app settings and place it in:"
+            echo
+            echo "FarmersMeet/app/google-services.json"
+            exit 1
+          fi
 
-          path = "/tmp/google-services.json"
+          echo "Firebase google-services.json found."
 
-          with open(path, "r", encoding="utf-8") as f:
-              data = json.load(f)
 
-          clients = data.get("client", [])
-
-          expected = "ng.farmersmeet.nigeria"
-          found = False
-
-          for client in clients:
-              package_name = (
-                  client
-                  .get("client_info", {})
-                  .get("android_client_info", {})
-                  .get("package_name")
-              )
-
-              print("Found Firebase package:", package_name)
-
-              if package_name == expected:
-                  found = True
-
-          if not found:
-              raise SystemExit(
-                  "ERROR: Firebase configuration does not contain "
-                  + expected
-              )
-
-          print("Firebase package verification successful.")
-          PY
-
-      - name: Create FarmersMeet project
+      # ---------------------------------------------------------
+      # 7. SHOW PROJECT STRUCTURE
+      # ---------------------------------------------------------
+      - name: Show project structure
         shell: bash
         run: |
           set -e
 
-          rm -rf FarmersMeet
-
-          mkdir -p FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria
-          mkdir -p FarmersMeet/app/src/main/res/values
-
-          cp /tmp/google-services.json \
-             FarmersMeet/app/google-services.json
-
-          cat > FarmersMeet/settings.gradle <<'EOF'
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-
-          rootProject.name = "FarmersMeetNigeria"
-
-          include(":app")
-          EOF
-
-          cat > FarmersMeet/build.gradle <<'EOF'
-          plugins {
-              id 'com.android.application' version '8.7.3' apply false
-              id 'org.jetbrains.kotlin.android' version '1.9.24' apply false
-              id 'com.google.gms.google-services' version '4.4.2' apply false
-          }
-          EOF
-
-          cat > FarmersMeet/gradle.properties <<'EOF'
-          android.useAndroidX=true
-          android.nonTransitiveRClass=true
-          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-          EOF
-
-          cat > FarmersMeet/app/build.gradle <<'EOF'
-          plugins {
-              id 'com.android.application'
-              id 'org.jetbrains.kotlin.android'
-              id 'com.google.gms.google-services'
-          }
-
-          android {
-              namespace 'ng.farmersmeet.nigeria'
-              compileSdk 35
-
-              defaultConfig {
-                  applicationId 'ng.farmersmeet.nigeria'
-                  minSdk 24
-                  targetSdk 35
-                  versionCode 11
-                  versionName "10.0"
-              }
-
-              buildTypes {
-                  debug {
-                      debuggable true
-                      minifyEnabled false
-                  }
-
-                  release {
-                      minifyEnabled false
-                  }
-              }
-
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-
-              kotlinOptions {
-                  jvmTarget = "17"
-              }
-          }
-
-          dependencies {
-              implementation 'androidx.core:core-ktx:1.15.0'
-              implementation 'androidx.appcompat:appcompat:1.7.0'
-              implementation 'androidx.activity:activity-ktx:1.10.1'
-
-              implementation platform(
-                  'com.google.firebase:firebase-bom:34.19.0'
-              )
-
-              implementation 'com.google.firebase:firebase-auth'
-              implementation 'com.google.firebase:firebase-firestore'
-          }
-          EOF
-
-          cat > FarmersMeet/app/src/main/AndroidManifest.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-
-          <manifest
-              xmlns:android="http://schemas.android.com/apk/res/android">
-
-              <application
-                  android:allowBackup="true"
-                  android:label="FarmersMeet"
-                  android:supportsRtl="true"
-                  android:theme="@style/AppTheme">
-
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true"
-                      android:screenOrientation="portrait">
-
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-
-                  </activity>
-
-              </application>
-
-          </manifest>
-          EOF
-
-          cat > FarmersMeet/app/src/main/res/values/themes.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-
-          <resources>
-
-              <style
-                  name="AppTheme"
-                  parent="Theme.AppCompat.Light.NoActionBar">
-
-                  <item name="android:fontFamily">sans</item>
-                  <item name="android:colorAccent">#176B35</item>
-                  <item name="android:statusBarColor">#0D4D25</item>
-                  <item name="android:navigationBarColor">#0D4D25</item>
-                  <item name="android:windowLightStatusBar">false</item>
-
-              </style>
-
-          </resources>
-          EOF
-
-          cat > FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt <<'EOF'
-          package ng.farmersmeet.nigeria
-
-          import android.os.Bundle
-          import android.graphics.Color
-          import android.view.Gravity
-          import android.widget.Button
-          import android.widget.EditText
-          import android.widget.LinearLayout
-          import android.widget.ScrollView
-          import android.widget.TextView
-          import android.widget.Toast
-
-          import androidx.appcompat.app.AppCompatActivity
-
-          import com.google.firebase.auth.FirebaseAuth
-          import com.google.firebase.firestore.FirebaseFirestore
-          import com.google.firebase.firestore.SetOptions
-
-          class MainActivity : AppCompatActivity() {
-
-              private lateinit var auth: FirebaseAuth
-              private lateinit var db: FirebaseFirestore
-
-              private val green = Color.rgb(23, 107, 53)
-              private val yellow = Color.rgb(244, 196, 48)
-              private val background = Color.rgb(247, 250, 245)
-              private val textColor = Color.rgb(24, 53, 31)
-
-              override fun onCreate(savedInstanceState: Bundle?) {
-                  super.onCreate(savedInstanceState)
-
-                  auth = FirebaseAuth.getInstance()
-                  db = FirebaseFirestore.getInstance()
-
-                  if (auth.currentUser != null) {
-                      showMarketplace()
-                  } else {
-                      showWelcome()
-                  }
-              }
-
-              private fun base(): LinearLayout =
-                  LinearLayout(this).apply {
-                      orientation = LinearLayout.VERTICAL
-                      setBackgroundColor(background)
-                      setPadding(24, 24, 24, 24)
-                  }
-
-              private fun title(value: String): TextView =
-                  TextView(this).apply {
-                      text = value
-                      textSize = 30f
-                      setTextColor(green)
-                      setTypeface(
-                          null,
-                          android.graphics.Typeface.BOLD
-                      )
-                      setPadding(0, 10, 0, 18)
-                  }
-
-              private fun field(hintValue: String): EditText =
-                  EditText(this).apply {
-                      hint = hintValue
-                      textSize = 16f
-                      setSingleLine(true)
-                      setTextColor(textColor)
-
-                      layoutParams =
-                          LinearLayout.LayoutParams(
-                              LinearLayout.LayoutParams.MATCH_PARENT,
-                              LinearLayout.LayoutParams.WRAP_CONTENT
-                          ).apply {
-                              setMargins(0, 6, 0, 6)
-                          }
-                  }
-
-              private fun button(
-                  value: String,
-                  yellowButton: Boolean = false
-              ): Button =
-                  Button(this).apply {
-                      text = value
-                      textSize = 15f
-
-                      setTypeface(
-                          null,
-                          android.graphics.Typeface.BOLD
-                      )
-
-                      setTextColor(
-                          if (yellowButton)
-                              textColor
-                          else
-                              Color.WHITE
-                      )
-
-                      setBackgroundColor(
-                          if (yellowButton)
-                              yellow
-                          else
-                              green
-                      )
-
-                      layoutParams =
-                          LinearLayout.LayoutParams(
-                              LinearLayout.LayoutParams.MATCH_PARENT,
-                              LinearLayout.LayoutParams.WRAP_CONTENT
-                          ).apply {
-                              setMargins(0, 6, 0, 6)
-                          }
-                  }
-
-              private fun showWelcome() {
-                  val root = base()
-
-                  root.gravity = Gravity.CENTER
-
-                  val logo =
-                      title("FarmersMeet").apply {
-                          textSize = 40f
-                          gravity = Gravity.CENTER
-                      }
-
-                  val stage =
-                      TextView(this).apply {
-                          text = "STAGE 10"
-                          textSize = 13f
-                          gravity = Gravity.CENTER
-                          setTextColor(green)
-                      }
-
-                  val login =
-                      button("LOGIN", true)
-
-                  login.setOnClickListener {
-                      showLogin()
-                  }
-
-                  val register =
-                      button("CREATE ACCOUNT")
-
-                  register.setOnClickListener {
-                      showRegister()
-                  }
-
-                  root.addView(logo)
-                  root.addView(stage)
-                  root.addView(login)
-                  root.addView(register)
-
-                  setContentView(root)
-              }
-
-              private fun showLogin() {
-                  val scroll = ScrollView(this)
-                  val root = base()
-
-                  root.addView(title("Login"))
-
-                  val email =
-                      field("Email address")
-
-                  val password =
-                      field("Password")
-
-                  password.inputType =
-                      android.text.InputType.TYPE_CLASS_TEXT or
-                      android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-
-                  root.addView(email)
-                  root.addView(password)
-
-                  val login =
-                      button("LOGIN", true)
-
-                  login.setOnClickListener {
-
-                      val emailValue =
-                          email.text.toString().trim()
-
-                      val passwordValue =
-                          password.text.toString()
-
-                      if (
-                          emailValue.isEmpty() ||
-                          passwordValue.isEmpty()
-                      ) {
-                          toast(
-                              "Enter your email and password."
-                          )
-                          return@setOnClickListener
-                      }
-
-                      login.isEnabled = false
-                      login.text = "LOGGING IN..."
-
-                      auth.signInWithEmailAndPassword(
-                          emailValue,
-                          passwordValue
-                      ).addOnCompleteListener { task ->
-
-                          login.isEnabled = true
-                          login.text = "LOGIN"
-
-                          if (task.isSuccessful) {
-                              toast("Login successful.")
-                              showMarketplace()
-                          } else {
-                              toast(
-                                  task.exception?.message
-                                      ?: "Login failed."
-                              )
-                          }
-                      }
-                  }
-
-                  root.addView(login)
-
-                  val reset =
-                      button("RESET PASSWORD")
-
-                  reset.setOnClickListener {
-
-                      val emailValue =
-                          email.text.toString().trim()
-
-                      if (emailValue.isEmpty()) {
-                          toast(
-                              "Enter your email first."
-                          )
-                          return@setOnClickListener
-                      }
-
-                      auth.sendPasswordResetEmail(
-                          emailValue
-                      ).addOnCompleteListener { task ->
-
-                          if (task.isSuccessful) {
-                              toast(
-                                  "Password reset email sent."
-                              )
-                          } else {
-                              toast(
-                                  task.exception?.message
-                                      ?: "Could not send reset email."
-                              )
-                          }
-                      }
-                  }
-
-                  root.addView(reset)
-
-                  val register =
-                      button("CREATE ACCOUNT")
-
-                  register.setOnClickListener {
-                      showRegister()
-                  }
-
-                  root.addView(register)
-
-                  val back =
-                      button("BACK")
-
-                  back.setOnClickListener {
-                      showWelcome()
-                  }
-
-                  root.addView(back)
-
-                  scroll.addView(root)
-
-                  setContentView(scroll)
-              }
-
-              private fun showRegister() {
-                  val scroll = ScrollView(this)
-                  val root = base()
-
-                  root.addView(title("Create Account"))
-
-                  val name =
-                      field("Full name")
-
-                  val email =
-                      field("Email address")
-
-                  val phone =
-                      field("Phone number")
-
-                  val location =
-                      field("Location")
-
-                  val password =
-                      field("Password")
-
-                  val confirm =
-                      field("Confirm password")
-
-                  password.inputType =
-                      android.text.InputType.TYPE_CLASS_TEXT or
-                      android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-
-                  confirm.inputType =
-                      android.text.InputType.TYPE_CLASS_TEXT or
-                      android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-
-                  root.addView(name)
-                  root.addView(email)
-                  root.addView(phone)
-                  root.addView(location)
-                  root.addView(password)
-                  root.addView(confirm)
-
-                  val create =
-                      button(
-                          "CREATE ACCOUNT",
-                          true
-                      )
-
-                  create.setOnClickListener {
-
-                      val nameValue =
-                          name.text.toString().trim()
-
-                      val emailValue =
-                          email.text.toString().trim()
-
-                      val phoneValue =
-                          phone.text.toString().trim()
-
-                      val locationValue =
-                          location.text.toString().trim()
-
-                      val passwordValue =
-                          password.text.toString()
-
-                      val confirmValue =
-                          confirm.text.toString()
-
-                      if (
-                          nameValue.isEmpty() ||
-                          emailValue.isEmpty() ||
-                          phoneValue.isEmpty() ||
-                          locationValue.isEmpty() ||
-                          passwordValue.isEmpty()
-                      ) {
-                          toast(
-                              "Please complete all fields."
-                          )
-                          return@setOnClickListener
-                      }
-
-                      if (passwordValue.length < 6) {
-                          toast(
-                              "Password must be at least 6 characters."
-                          )
-                          return@setOnClickListener
-                      }
-
-                      if (
-                          passwordValue != confirmValue
-                      ) {
-                          toast(
-                              "Passwords do not match."
-                          )
-                          return@setOnClickListener
-                      }
-
-                      create.isEnabled = false
-                      create.text = "CREATING..."
-
-                      auth.createUserWithEmailAndPassword(
-                          emailValue,
-                          passwordValue
-                      ).addOnCompleteListener { task ->
-
-                          if (!task.isSuccessful) {
-                              create.isEnabled = true
-                              create.text = "CREATE ACCOUNT"
-
-                              toast(
-                                  task.exception?.message
-                                      ?: "Registration failed."
-                              )
-
-                              return@addOnCompleteListener
-                          }
-
-                          val user =
-                              auth.currentUser
-
-                          if (user == null) {
-                              create.isEnabled = true
-                              create.text = "CREATE ACCOUNT"
-
-                              toast(
-                                  "Account created but session could not be opened."
-                              )
-
-                              return@addOnCompleteListener
-                          }
-
-                          val data =
-                              hashMapOf(
-                                  "uid" to user.uid,
-                                  "name" to nameValue,
-                                  "email" to emailValue,
-                                  "phone" to phoneValue,
-                                  "location" to locationValue,
-                                  "createdAt" to
-                                      com.google.firebase.Timestamp.now()
-                              )
-
-                          db.collection("users")
-                              .document(user.uid)
-                              .set(data)
-                              .addOnCompleteListener { profileTask ->
-
-                                  create.isEnabled = true
-                                  create.text = "CREATE ACCOUNT"
-
-                                  if (
-                                      profileTask.isSuccessful
-                                  ) {
-                                      toast(
-                                          "Account created successfully."
-                                      )
-                                  } else {
-                                      toast(
-                                          "Account created. Profile save failed."
-                                      )
-                                  }
-
-                                  showMarketplace()
-                              }
-                      }
-                  }
-
-                  root.addView(create)
-
-                  val login =
-                      button(
-                          "I ALREADY HAVE AN ACCOUNT"
-                      )
-
-                  login.setOnClickListener {
-                      showLogin()
-                  }
-
-                  root.addView(login)
-
-                  val back =
-                      button("BACK")
-
-                  back.setOnClickListener {
-                      showWelcome()
-                  }
-
-                  root.addView(back)
-
-                  scroll.addView(root)
-
-                  setContentView(scroll)
-              }
-
-              private fun showMarketplace() {
-                  val user = auth.currentUser
-
-                  if (user == null) {
-                      showLogin()
-                      return
-                  }
-
-                  val root = base()
-
-                  root.addView(
-                      title("FarmersMeet Marketplace")
-                  )
-
-                  root.addView(
-                      TextView(this).apply {
-                          text =
-                              "Signed in as:\n${user.email}"
-
-                          textSize = 16f
-                          setTextColor(textColor)
-                          setPadding(0, 0, 0, 20)
-                      }
-                  )
-
-                  val profile =
-                      button("MY PROFILE")
-
-                  profile.setOnClickListener {
-                      showProfile()
-                  }
-
-                  root.addView(profile)
-
-                  val marketplace =
-                      button(
-                          "MARKETPLACE",
-                          true
-                      )
-
-                  marketplace.setOnClickListener {
-                      toast(
-                          "Marketplace system continues in Stage 11."
-                      )
-                  }
-
-                  root.addView(marketplace)
-
-                  val logout =
-                      button("LOG OUT")
-
-                  logout.setOnClickListener {
-                      auth.signOut()
-                      showWelcome()
-                  }
-
-                  root.addView(logout)
-
-                  setContentView(root)
-              }
-
-              private fun showProfile() {
-                  val user = auth.currentUser
-
-                  if (user == null) {
-                      showLogin()
-                      return
-                  }
-
-                  val scroll = ScrollView(this)
-                  val root = base()
-
-                  root.addView(title("My Profile"))
-
-                  val name =
-                      field("Full name")
-
-                  val phone =
-                      field("Phone number")
-
-                  val location =
-                      field("Location")
-
-                  root.addView(name)
-                  root.addView(phone)
-                  root.addView(location)
-
-                  db.collection("users")
-                      .document(user.uid)
-                      .get()
-                      .addOnSuccessListener { document ->
-
-                          if (document.exists()) {
-                              name.setText(
-                                  document.getString("name")
-                                      ?: ""
-                              )
-
-                              phone.setText(
-                                  document.getString("phone")
-                                      ?: ""
-                              )
-
-                              location.setText(
-                                  document.getString("location")
-                                      ?: ""
-                              )
-                          }
-                      }
-
-                  root.addView(
-                      TextView(this).apply {
-                          text =
-                              "Email:\n${user.email}"
-
-                          textSize = 17f
-                          setTextColor(textColor)
-                          setPadding(0, 15, 0, 20)
-                      }
-                  )
-
-                  val save =
-                      button(
-                          "SAVE PROFILE",
-                          true
-                      )
-
-                  save.setOnClickListener {
-
-                      val data =
-                          hashMapOf(
-                              "uid" to user.uid,
-                              "name" to
-                                  name.text.toString().trim(),
-                              "email" to
-                                  (user.email ?: ""),
-                              "phone" to
-                                  phone.text.toString().trim(),
-                              "location" to
-                                  location.text.toString().trim()
-                          )
-
-                      save.isEnabled = false
-                      save.text = "SAVING..."
-
-                      db.collection("users")
-                          .document(user.uid)
-                          .set(
-                              data,
-                              SetOptions.merge()
-                          )
-                          .addOnCompleteListener { task ->
-
-                              save.isEnabled = true
-                              save.text = "SAVE PROFILE"
-
-                              if (task.isSuccessful) {
-                                  toast(
-                                      "Profile saved."
-                                  )
-                              } else {
-                                  toast(
-                                      task.exception?.message
-                                          ?: "Could not save profile."
-                                  )
-                              }
-                          }
-                  }
-
-                  root.addView(save)
-
-                  val logout =
-                      button("LOG OUT")
-
-                  logout.setOnClickListener {
-                      auth.signOut()
-                      showWelcome()
-                  }
-
-                  root.addView(logout)
-
-                  val back =
-                      button("BACK")
-
-                  back.setOnClickListener {
-                      showMarketplace()
-                  }
-
-                  root.addView(back)
-
-                  scroll.addView(root)
-
-                  setContentView(scroll)
-              }
-
-              private fun toast(message: String) {
-                  Toast.makeText(
-                      this,
-                      message,
-                      Toast.LENGTH_LONG
-                  ).show()
-              }
-          }
-          EOF
-
-      - name: Create Gradle wrapper
+          echo "=========================================="
+          echo "FARMERSMEET PROJECT"
+          echo "=========================================="
+
+          find FarmersMeet \
+            -maxdepth 4 \
+            -type f \
+            \( \
+              -name "*.gradle" \
+              -o -name "*.gradle.kts" \
+              -o -name "AndroidManifest.xml" \
+              -o -name "google-services.json" \
+              -o -name "gradlew" \
+            \) \
+            -print | sort
+
+
+      # ---------------------------------------------------------
+      # 8. MAKE GRADLE WRAPPER EXECUTABLE
+      # ---------------------------------------------------------
+      - name: Prepare Gradle wrapper
         shell: bash
         run: |
           set -e
 
           cd FarmersMeet
 
-          gradle wrapper \
-            --gradle-version 8.9 \
-            --distribution-type bin
+          if [ ! -f "gradlew" ]; then
+            echo "ERROR: Gradle wrapper was not found."
+            echo "Expected: FarmersMeet/gradlew"
+            exit 1
+          fi
 
+          chmod +x gradlew
+
+          echo "Gradle wrapper:"
+          ./gradlew --version
+
+
+      # ---------------------------------------------------------
+      # 9. CLEAN BUILD
+      # ---------------------------------------------------------
+      - name: Clean project
+        shell: bash
+        run: |
+          set -e
+
+          cd FarmersMeet
+
+          ./gradlew \
+            --no-daemon \
+            --stacktrace \
+            clean
+
+
+      # ---------------------------------------------------------
+      # 10. BUILD STAGE 10 DEBUG APK
+      # ---------------------------------------------------------
       - name: Build Stage 10 APK
         shell: bash
         run: |
@@ -976,28 +221,44 @@ jobs:
 
           cd FarmersMeet
 
-          chmod +x gradlew
-
           ./gradlew \
             --no-daemon \
             --stacktrace \
-            clean \
             assembleDebug
 
-      - name: Verify APK
+
+      # ---------------------------------------------------------
+      # 11. VERIFY APK
+      # ---------------------------------------------------------
+      - name: Verify Stage 10 APK
         shell: bash
         run: |
           set -e
 
           APK="FarmersMeet/app/build/outputs/apk/debug/app-debug.apk"
 
-          test -f "$APK"
+          if [ ! -f "$APK" ]; then
+            echo "ERROR: APK was not produced."
+            echo
+            echo "Build output:"
+            find FarmersMeet/app/build \
+              -type f \
+              -name "*.apk" \
+              -print 2>/dev/null || true
+            exit 1
+          fi
 
-          echo "Stage 10 APK successfully created."
-
+          echo
+          echo "=========================================="
+          echo "STAGE 10 APK CREATED"
+          echo "=========================================="
           ls -lh "$APK"
 
-      - name: Upload Stage 10 APK
+
+      # ---------------------------------------------------------
+      # 12. UPLOAD APK
+      # ---------------------------------------------------------
+      - name: Upload FarmersMeet Stage 10 APK
         uses: actions/upload-artifact@v4
         with:
           name: FarmersMeet-Stage-10-APK
