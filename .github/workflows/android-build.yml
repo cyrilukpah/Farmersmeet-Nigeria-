@@ -1,316 +1,552 @@
-steps:
-  - name: Checkout
-    uses: actions/checkout@v4
+name: FarmersMeet Clean Stage 9 APK
 
-  - name: Set up JDK 17
-    uses: actions/setup-java@v4
-    with:
-      distribution: temurin
-      java-version: '17'
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
 
-  - name: Set up Gradle
-    uses: gradle/actions/setup-gradle@v4
-    with:
-      gradle-version: '8.10'
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-  - name: Create clean FarmersMeet project
-    shell: bash
-    run: |
-      set -e
-      rm -rf FarmersMeet
-      mkdir -p FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria
-      mkdir -p FarmersMeet/app/src/main/res/values
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      cat > FarmersMeet/settings.gradle <<'EOF'
-      pluginManagement {
-          repositories {
-              google()
-              mavenCentral()
-              gradlePluginPortal()
-          }
-      }
-      dependencyResolutionManagement {
-          repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-          repositories {
-              google()
-              mavenCentral()
-          }
-      }
-      rootProject.name = "FarmersMeet"
-      include(":app")
-      EOF
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
 
-      cat > FarmersMeet/build.gradle <<'EOF'
-      plugins {
-          id 'com.android.application' version '8.7.3' apply false
-          id 'org.jetbrains.kotlin.android' version '2.0.21' apply false
-      }
-      EOF
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10'
 
-      cat > FarmersMeet/gradle.properties <<'EOF'
-      android.useAndroidX=true
-      android.nonTransitiveRClass=true
-      org.gradle.jvmargs=-Xmx2048m
-      EOF
+      - name: Create clean FarmersMeet project
+        shell: bash
+        run: |
+          set -e
 
-      cat > FarmersMeet/app/build.gradle <<'EOF'
-      plugins {
-          id 'com.android.application'
-          id 'org.jetbrains.kotlin.android'
-      }
+          rm -rf FarmersMeet
 
-      android {
-          namespace 'ng.farmersmeet.nigeria'
-          compileSdk 35
+          mkdir -p FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria
+          mkdir -p FarmersMeet/app/src/main/res/values
 
-          defaultConfig {
-              applicationId 'ng.farmersmeet.nigeria'
-              minSdk 24
-              targetSdk 35
-              versionCode 9
-              versionName "9.0"
+          cat > FarmersMeet/settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
           }
 
-          compileOptions {
-              sourceCompatibility JavaVersion.VERSION_17
-              targetCompatibility JavaVersion.VERSION_17
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
           }
 
-          kotlinOptions {
-              jvmTarget = "17"
+          rootProject.name = "FarmersMeet"
+          include(":app")
+          EOF
+
+          cat > FarmersMeet/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.7.3' apply false
+              id 'org.jetbrains.kotlin.android' version '2.0.21' apply false
           }
-      }
+          EOF
 
-      dependencies {
-          implementation 'androidx.core:core-ktx:1.15.0'
-          implementation 'androidx.appcompat:appcompat:1.7.0'
-          implementation 'androidx.activity:activity-ktx:1.10.1'
-      }
-      EOF
+          cat > FarmersMeet/gradle.properties <<'EOF'
+          android.useAndroidX=true
+          android.nonTransitiveRClass=true
+          org.gradle.jvmargs=-Xmx2048m
+          EOF
 
-      cat > FarmersMeet/app/src/main/res/values/themes.xml <<'EOF'
-      <?xml version="1.0" encoding="utf-8"?>
-      <resources>
-          <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
-              <item name="android:fontFamily">sans</item>
-              <item name="android:colorAccent">#127039</item>
-              <item name="android:statusBarColor">#123B25</item>
-              <item name="android:navigationBarColor">#123B25</item>
-              <item name="android:windowLightStatusBar">false</item>
-          </style>
-      </resources>
-      EOF
-
-      cat > FarmersMeet/app/src/main/AndroidManifest.xml <<'EOF'
-      <?xml version="1.0" encoding="utf-8"?>
-      <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-          <application
-              android:theme="@style/AppTheme"
-              android:label="FarmersMeet"
-              android:allowBackup="true"
-              android:supportsRtl="true">
-              <activity
-                  android:name=".MainActivity"
-                  android:screenOrientation="portrait"
-                  android:exported="true">
-                  <intent-filter>
-                      <action android:name="android.intent.action.MAIN" />
-                      <category android:name="android.intent.category.LAUNCHER" />
-                  </intent-filter>
-              </activity>
-          </application>
-      </manifest>
-      EOF
-
-      cat > FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt <<'EOF'
-      package ng.farmersmeet.nigeria
-
-      import android.graphics.Color
-      import android.os.Bundle
-      import android.view.Gravity
-      import android.view.ViewGroup
-      import android.widget.Button
-      import android.widget.EditText
-      import android.widget.LinearLayout
-      import android.widget.ScrollView
-      import android.widget.TextView
-      import androidx.appcompat.app.AppCompatActivity
-
-      class MainActivity : AppCompatActivity() {
-          private val green = Color.rgb(18,112,57)
-          private val dark = Color.rgb(18,59,37)
-          private val gold = Color.rgb(244,193,43)
-          private val bg = Color.rgb(248,250,247)
-
-          override fun onCreate(savedInstanceState: Bundle?) {
-              super.onCreate(savedInstanceState)
-              showHome()
+          cat > FarmersMeet/app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+              id 'org.jetbrains.kotlin.android'
           }
 
-          private fun root() = LinearLayout(this).apply {
-              orientation = LinearLayout.VERTICAL
-              setBackgroundColor(bg)
-              setPadding(28,28,28,28)
-          }
+          android {
+              namespace 'ng.farmersmeet.nigeria'
+              compileSdk 35
 
-          private fun title(text: String) = TextView(this).apply {
-              this.text = text
-              textSize = 30f
-              setTextColor(green)
-              setTypeface(null, android.graphics.Typeface.BOLD)
-              gravity = Gravity.CENTER
-              setPadding(0,30,0,20)
-          }
-
-          private fun button(text: String, goldButton: Boolean=false) =
-              Button(this).apply {
-                  this.text = text
-                  textSize = 16f
-                  isAllCaps = false
-                  isClickable = true
-                  isFocusable = true
-                  setTypeface(null, android.graphics.Typeface.BOLD)
-                  setTextColor(if (goldButton) dark else Color.WHITE)
-                  setBackgroundColor(if (goldButton) gold else green)
-                  layoutParams = LinearLayout.LayoutParams(
-                      ViewGroup.LayoutParams.MATCH_PARENT,
-                      ViewGroup.LayoutParams.WRAP_CONTENT
-                  ).apply { setMargins(0,8,0,8) }
+              defaultConfig {
+                  applicationId 'ng.farmersmeet.nigeria'
+                  minSdk 24
+                  targetSdk 35
+                  versionCode 9
+                  versionName "9.0"
               }
 
-          private fun showHome() {
-              val r = root().apply { gravity = Gravity.CENTER }
-              r.addView(title("FarmersMeet").apply { textSize=40f })
-              r.addView(TextView(this).apply {
-                  text = "Nigeria's agricultural marketplace"
-                  textSize = 17f
-                  setTextColor(dark)
-                  gravity = Gravity.CENTER
-                  setPadding(0,0,0,28)
-              })
-              r.addView(button("Enter Marketplace", true).apply {
-                  setOnClickListener { showMarketplace() }
-              })
-              setContentView(r)
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
           }
 
-          private fun showMarketplace() {
-              val scroll = ScrollView(this)
-              val r = root()
-              r.addView(title("FarmersMeet Marketplace"))
-              r.addView(TextView(this).apply {
-                  text = "Buy and sell agricultural products across Nigeria."
-                  textSize = 16f
-                  setTextColor(dark)
-                  setPadding(0,0,0,15)
-              })
+          dependencies {
+              implementation 'androidx.core:core-ktx:1.15.0'
+              implementation 'androidx.appcompat:appcompat:1.7.0'
+              implementation 'androidx.activity:activity-ktx:1.10.1'
+          }
+          EOF
 
-              val search = EditText(this).apply {
-                  hint = "Search products..."
-                  textSize = 16f
-                  setSingleLine(true)
+          cat > FarmersMeet/app/src/main/res/values/themes.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+
+              <style name="AppTheme"
+                  parent="Theme.AppCompat.Light.NoActionBar">
+
+                  <item name="android:fontFamily">sans</item>
+                  <item name="android:colorAccent">#127039</item>
+                  <item name="android:statusBarColor">#123B25</item>
+                  <item name="android:navigationBarColor">#123B25</item>
+                  <item name="android:windowLightStatusBar">false</item>
+
+              </style>
+
+          </resources>
+          EOF
+
+          cat > FarmersMeet/app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <application
+                  android:theme="@style/AppTheme"
+                  android:label="FarmersMeet"
+                  android:allowBackup="true"
+                  android:supportsRtl="true">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:screenOrientation="portrait"
+                      android:exported="true">
+
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+
+                  </activity>
+
+              </application>
+
+          </manifest>
+          EOF
+
+          cat > FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt <<'EOF'
+          package ng.farmersmeet.nigeria
+
+          import android.graphics.Color
+          import android.os.Bundle
+          import android.view.Gravity
+          import android.view.ViewGroup
+          import android.widget.Button
+          import android.widget.EditText
+          import android.widget.LinearLayout
+          import android.widget.ScrollView
+          import android.widget.TextView
+          import androidx.appcompat.app.AppCompatActivity
+
+          class MainActivity : AppCompatActivity() {
+
+              private val green = Color.rgb(18, 112, 57)
+              private val dark = Color.rgb(18, 59, 37)
+              private val gold = Color.rgb(244, 193, 43)
+              private val bg = Color.rgb(248, 250, 247)
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  showHome()
               }
-              r.addView(search)
-              r.addView(button("Search", true).apply {
-                  setOnClickListener {
-                      showMessage("Search", "You searched for: ${search.text}")
+
+              private fun root(): LinearLayout {
+                  return LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      setBackgroundColor(bg)
+                      setPadding(28, 28, 28, 28)
                   }
-              })
-
-              arrayOf(
-                  "Crops & Farm Produce",
-                  "Pigs & Piglets",
-                  "Fish & Aquaculture",
-                  "Other Livestock",
-                  "Poultry",
-                  "Seeds & Seedlings",
-                  "Farm Equipment"
-              ).forEach { category ->
-                  r.addView(button(category).apply {
-                      setOnClickListener {
-                          showMessage(category, "Listings for $category will appear here.")
-                      }
-                  })
               }
 
-              r.addView(button("Sell an Item", true).apply {
-                  setOnClickListener { showSell() }
-              })
-              r.addView(button("Exit").apply { setOnClickListener { finish() } })
+              private fun title(textValue: String): TextView {
+                  return TextView(this).apply {
+                      text = textValue
+                      textSize = 30f
+                      setTextColor(green)
+                      setTypeface(
+                          null,
+                          android.graphics.Typeface.BOLD
+                      )
+                      gravity = Gravity.CENTER
+                      setPadding(0, 30, 0, 20)
+                  }
+              }
 
-              scroll.addView(r)
-              setContentView(scroll)
-          }
+              private fun button(
+                  textValue: String,
+                  goldButton: Boolean = false
+              ): Button {
 
-          private fun showSell() {
-              val scroll = ScrollView(this)
-              val r = root()
-              r.addView(title("Sell an Item"))
+                  return Button(this).apply {
 
-              val fields = listOf(
-                  "Product name","Price in Naira","Quantity",
-                  "Location","Seller name","Phone number","Description"
-              )
-              val edits = fields.map { hint ->
-                  EditText(this).apply {
-                      this.hint = hint
+                      text = textValue
                       textSize = 16f
-                      setSingleLine(hint != "Description")
-                      layoutParams = LinearLayout.LayoutParams(
-                          ViewGroup.LayoutParams.MATCH_PARENT,
-                          ViewGroup.LayoutParams.WRAP_CONTENT
-                      ).apply { setMargins(0,5,0,5) }
-                  }.also { r.addView(it) }
+                      isAllCaps = false
+                      isClickable = true
+                      isFocusable = true
+
+                      setTypeface(
+                          null,
+                          android.graphics.Typeface.BOLD
+                      )
+
+                      setTextColor(
+                          if (goldButton) {
+                              dark
+                          } else {
+                              Color.WHITE
+                          }
+                      )
+
+                      setBackgroundColor(
+                          if (goldButton) {
+                              gold
+                          } else {
+                              green
+                          }
+                      )
+
+                      layoutParams =
+                          LinearLayout.LayoutParams(
+                              ViewGroup.LayoutParams.MATCH_PARENT,
+                              ViewGroup.LayoutParams.WRAP_CONTENT
+                          ).apply {
+                              setMargins(0, 8, 0, 8)
+                          }
+                  }
               }
 
-              r.addView(button("Post Listing", true).apply {
-                  setOnClickListener {
-                      if (edits.take(6).any { it.text.toString().trim().isEmpty() }) {
-                          showMessage("Incomplete","Please complete the required fields.")
-                      } else {
-                          showMessage("Success","Your listing has been posted.")
-                      }
+              private fun showHome() {
+
+                  val r = root().apply {
+                      gravity = Gravity.CENTER
                   }
-              })
-              r.addView(button("Back to Marketplace").apply {
-                  setOnClickListener { showMarketplace() }
-              })
-              scroll.addView(r)
-              setContentView(scroll)
+
+                  r.addView(
+                      title("FarmersMeet").apply {
+                          textSize = 40f
+                      }
+                  )
+
+                  r.addView(
+                      TextView(this).apply {
+                          text =
+                              "Nigeria's agricultural marketplace"
+                          textSize = 17f
+                          setTextColor(dark)
+                          gravity = Gravity.CENTER
+                          setPadding(0, 0, 0, 28)
+                      }
+                  )
+
+                  r.addView(
+                      button(
+                          "Enter Marketplace",
+                          true
+                      ).apply {
+                          setOnClickListener {
+                              showMarketplace()
+                          }
+                      }
+                  )
+
+                  setContentView(r)
+              }
+
+              private fun showMarketplace() {
+
+                  val scroll = ScrollView(this)
+                  val r = root()
+
+                  r.addView(
+                      title("FarmersMeet Marketplace")
+                  )
+
+                  r.addView(
+                      TextView(this).apply {
+                          text =
+                              "Buy and sell agricultural products across Nigeria."
+                          textSize = 16f
+                          setTextColor(dark)
+                          setPadding(0, 0, 0, 15)
+                      }
+                  )
+
+                  val search =
+                      EditText(this).apply {
+                          hint = "Search products..."
+                          textSize = 16f
+                          setSingleLine(true)
+                      }
+
+                  r.addView(search)
+
+                  r.addView(
+                      button("Search", true).apply {
+
+                          setOnClickListener {
+
+                              showMessage(
+                                  "Search",
+                                  "You searched for: ${search.text}"
+                              )
+                          }
+                      }
+                  )
+
+                  val categories =
+                      arrayOf(
+                          "Crops & Farm Produce",
+                          "Pigs & Piglets",
+                          "Fish & Aquaculture",
+                          "Other Livestock",
+                          "Poultry",
+                          "Seeds & Seedlings",
+                          "Farm Equipment"
+                      )
+
+                  categories.forEach { category ->
+
+                      r.addView(
+                          button(category).apply {
+
+                              setOnClickListener {
+
+                                  showMessage(
+                                      category,
+                                      "Listings for $category will appear here."
+                                  )
+                              }
+                          }
+                      )
+                  }
+
+                  r.addView(
+                      button(
+                          "Sell an Item",
+                          true
+                      ).apply {
+
+                          setOnClickListener {
+                              showSell()
+                          }
+                      }
+                  )
+
+                  r.addView(
+                      button("Exit").apply {
+                          setOnClickListener {
+                              finish()
+                          }
+                      }
+                  )
+
+                  scroll.addView(r)
+                  setContentView(scroll)
+              }
+
+              private fun showSell() {
+
+                  val scroll = ScrollView(this)
+                  val r = root()
+
+                  r.addView(
+                      title("Sell an Item")
+                  )
+
+                  val fields =
+                      listOf(
+                          "Product name",
+                          "Price in Naira",
+                          "Quantity",
+                          "Location",
+                          "Seller name",
+                          "Phone number",
+                          "Description"
+                      )
+
+                  val edits =
+                      fields.map { hintValue ->
+
+                          EditText(this).apply {
+
+                              hint = hintValue
+                              textSize = 16f
+
+                              setSingleLine(
+                                  hintValue != "Description"
+                              )
+
+                              layoutParams =
+                                  LinearLayout.LayoutParams(
+                                      ViewGroup.LayoutParams.MATCH_PARENT,
+                                      ViewGroup.LayoutParams.WRAP_CONTENT
+                                  ).apply {
+                                      setMargins(
+                                          0,
+                                          5,
+                                          0,
+                                          5
+                                      )
+                                  }
+
+                          }.also {
+                              r.addView(it)
+                          }
+                      }
+
+                  r.addView(
+                      button(
+                          "Post Listing",
+                          true
+                      ).apply {
+
+                          setOnClickListener {
+
+                              val incomplete =
+                                  edits
+                                      .take(6)
+                                      .any {
+                                          it.text
+                                              .toString()
+                                              .trim()
+                                              .isEmpty()
+                                      }
+
+                              if (incomplete) {
+
+                                  showMessage(
+                                      "Incomplete",
+                                      "Please complete the required fields."
+                                  )
+
+                              } else {
+
+                                  showMessage(
+                                      "Success",
+                                      "Your listing has been posted."
+                                  )
+                              }
+                          }
+                      }
+                  )
+
+                  r.addView(
+                      button(
+                          "Back to Marketplace"
+                      ).apply {
+
+                          setOnClickListener {
+                              showMarketplace()
+                          }
+                      }
+                  )
+
+                  scroll.addView(r)
+                  setContentView(scroll)
+              }
+
+              private fun showMessage(
+                  head: String,
+                  message: String
+              ) {
+
+                  val r = root()
+
+                  r.addView(
+                      title(head)
+                  )
+
+                  r.addView(
+                      TextView(this).apply {
+                          text = message
+                          textSize = 18f
+                          setTextColor(dark)
+                          setPadding(
+                              0,
+                              20,
+                              0,
+                              25
+                          )
+                      }
+                  )
+
+                  r.addView(
+                      button(
+                          "Back to Marketplace",
+                          true
+                      ).apply {
+
+                          setOnClickListener {
+                              showMarketplace()
+                          }
+                      }
+                  )
+
+                  setContentView(r)
+              }
           }
+          EOF
 
-          private fun showMessage(head: String, message: String) {
-              val r = root()
-              r.addView(title(head))
-              r.addView(TextView(this).apply {
-                  text = message
-                  textSize = 18f
-                  setTextColor(dark)
-                  setPadding(0,20,0,25)
-              })
-              r.addView(button("Back to Marketplace", true).apply {
-                  setOnClickListener { showMarketplace() }
-              })
-              setContentView(r)
-          }
-      }
-      EOF
+      - name: Verify project files
+        shell: bash
+        run: |
+          set -e
 
-  - name: Build APK
-    working-directory: FarmersMeet
-    run: gradle :app:assembleDebug --stacktrace
+          test -f FarmersMeet/settings.gradle
+          test -f FarmersMeet/build.gradle
+          test -f FarmersMeet/gradle.properties
+          test -f FarmersMeet/app/build.gradle
+          test -f FarmersMeet/app/src/main/AndroidManifest.xml
+          test -f FarmersMeet/app/src/main/res/values/themes.xml
+          test -f FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt
 
-  - name: Verify APK
-    shell: bash
-    run: |
-      test -s FarmersMeet/app/build/outputs/apk/debug/app-debug.apk
-      ls -lh FarmersMeet/app/build/outputs/apk/debug/app-debug.apk
+          echo "FarmersMeet Stage 9 project files verified."
 
-  - name: Upload APK
-    uses: actions/upload-artifact@v4
-    with:
-      name: FarmersMeet-Clean-Stage9-APK
-      path: FarmersMeet/app/build/outputs/apk/debug/app-debug.apk
-      if-no-files-found: error
-"""
-path = Path("/mnt/data/FarmersMeet-Clean-Build.yml") path.write_text(workflow, encoding="utf-8") print(f"Created: {path}")
+      - name: Build APK
+        working-directory: FarmersMeet
+        run: |
+          gradle :app:assembleDebug --stacktrace
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -e
+
+          test -s FarmersMeet/app/build/outputs/apk/debug/app-debug.apk
+
+          echo "FarmersMeet Stage 9 APK created successfully."
+          ls -lh FarmersMeet/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FarmersMeet-Clean-Stage9-APK
+          path: FarmersMeet/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
