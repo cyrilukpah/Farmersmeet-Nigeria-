@@ -1,4 +1,4 @@
-name: FarmersMeet Stage 7 APK
+        name: FarmersMeet Stage 8 APK
 
 on:
   workflow_dispatch:
@@ -29,6 +29,7 @@ jobs:
         shell: bash
         run: |
           rm -rf FarmersMeet
+
           mkdir -p FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria
           mkdir -p FarmersMeet/app/src/main/res/values
 
@@ -63,6 +64,7 @@ jobs:
           cat > FarmersMeet/gradle.properties <<'EOF'
           android.useAndroidX=true
           android.nonTransitiveRClass=true
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           EOF
 
           cat > FarmersMeet/app/build.gradle <<'EOF'
@@ -79,8 +81,8 @@ jobs:
                   applicationId 'ng.farmersmeet.nigeria'
                   minSdk 24
                   targetSdk 35
-                  versionCode 8
-                  versionName "8.0"
+                  versionCode 9
+                  versionName "8.1"
               }
 
               compileOptions {
@@ -139,6 +141,7 @@ jobs:
                   <item name="android:statusBarColor">#0D4D25</item>
                   <item name="android:navigationBarColor">#0D4D25</item>
                   <item name="android:windowLightStatusBar">false</item>
+                  <item name="android:windowActionModeOverlay">true</item>
 
               </style>
 
@@ -208,21 +211,24 @@ jobs:
                       ActivityResultContracts.OpenDocument()
                   ) { uri: Uri? ->
 
-                      if (uri != null) {
+                      if (uri == null) return@registerForActivityResult
 
+                      try {
+                          contentResolver.takePersistableUriPermission(
+                              uri,
+                              Intent.FLAG_GRANT_READ_URI_PERMISSION
+                          )
+                      } catch (_: Exception) {
+                      }
+
+                      selectedPhotoUri = uri
+
+                      selectedPhotoView?.let { image ->
                           try {
-                              contentResolver.takePersistableUriPermission(
-                                  uri,
-                                  Intent.FLAG_GRANT_READ_URI_PERMISSION
-                              )
+                              image.setImageURI(uri)
+                              image.visibility = ImageView.VISIBLE
                           } catch (_: Exception) {
-                          }
-
-                          selectedPhotoUri = uri
-
-                          selectedPhotoView?.apply {
-                              setImageURI(uri)
-                              visibility = ImageView.VISIBLE
+                              image.visibility = ImageView.GONE
                           }
                       }
                   }
@@ -230,8 +236,69 @@ jobs:
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
 
-                  seedListings()
-                  showHome()
+                  try {
+                      seedListingsSafely()
+                      showHome()
+                  } catch (e: Exception) {
+                      showStartupError(e)
+                  }
+              }
+
+              private fun showStartupError(error: Exception) {
+
+                  val root = baseLayout()
+
+                  root.gravity = Gravity.CENTER
+
+                  val title = TextView(this).apply {
+                      text = "FarmersMeet"
+                      textSize = 34f
+                      setTextColor(green)
+                      setTypeface(
+                          null,
+                          android.graphics.Typeface.BOLD
+                      )
+                      gravity = Gravity.CENTER
+                  }
+
+                  val message = TextView(this).apply {
+                      text =
+                          "FarmersMeet could not load its saved data.\n\n" +
+                          "You can continue by resetting local app data."
+                      textSize = 16f
+                      setTextColor(textColor)
+                      gravity = Gravity.CENTER
+                      setPadding(20, 20, 20, 20)
+                  }
+
+                  val reset = makeButton(
+                      "RESET APP DATA",
+                      true
+                  )
+
+                  reset.setOnClickListener {
+                      getSharedPreferences(
+                          "farmersmeet",
+                          Context.MODE_PRIVATE
+                      ).edit().clear().apply()
+
+                      try {
+                          seedListingsSafely()
+                          showHome()
+                      } catch (_: Exception) {
+                          Toast.makeText(
+                              this,
+                              "Unable to reset app data.",
+                              Toast.LENGTH_LONG
+                          ).show()
+                      }
+                  }
+
+                  root.addView(title)
+                  root.addView(message)
+                  root.addView(reset)
+
+                  setContentView(root)
               }
 
               private fun baseLayout(): LinearLayout {
@@ -247,7 +314,10 @@ jobs:
                       text = value
                       textSize = 28f
                       setTextColor(green)
-                      setTypeface(null, android.graphics.Typeface.BOLD)
+                      setTypeface(
+                          null,
+                          android.graphics.Typeface.BOLD
+                      )
                       setPadding(0, 10, 0, 18)
                   }
               }
@@ -268,13 +338,17 @@ jobs:
                       )
 
                       setTextColor(
-                          if (yellowButton) textColor
-                          else Color.WHITE
+                          if (yellowButton)
+                              textColor
+                          else
+                              Color.WHITE
                       )
 
                       setBackgroundColor(
-                          if (yellowButton) yellow
-                          else green
+                          if (yellowButton)
+                              yellow
+                          else
+                              green
                       )
 
                       layoutParams =
@@ -305,11 +379,10 @@ jobs:
                       setPadding(10, 0, 10, 25)
                   }
 
-                  val enter =
-                      makeButton(
-                          "ENTER MARKETPLACE",
-                          true
-                      )
+                  val enter = makeButton(
+                      "ENTER MARKETPLACE",
+                      true
+                  )
 
                   enter.setOnClickListener {
                       showMarketplace()
@@ -400,8 +473,7 @@ jobs:
 
                   categories.forEach { category ->
 
-                      val button =
-                          makeButton(category)
+                      val button = makeButton(category)
 
                       button.setOnClickListener {
                           showListings(category)
@@ -536,7 +608,6 @@ jobs:
                   } else {
 
                       results.forEach { listing ->
-
                           addListingCard(
                               root,
                               listing,
@@ -698,9 +769,7 @@ jobs:
 
                   favorite.setOnClickListener {
 
-                      toggleFavorite(
-                          listing.id
-                      )
+                      toggleFavorite(listing.id)
 
                       favorite.text =
                           if (isFavorite(listing.id))
@@ -740,9 +809,7 @@ jobs:
 
                       delete.setOnClickListener {
 
-                          deleteListing(
-                              listing.id
-                          )
+                          deleteListing(listing.id)
 
                           Toast.makeText(
                               this,
@@ -838,9 +905,7 @@ jobs:
 
                   favorite.setOnClickListener {
 
-                      toggleFavorite(
-                          listing.id
-                      )
+                      toggleFavorite(listing.id)
 
                       favorite.text =
                           if (isFavorite(listing.id))
@@ -859,9 +924,7 @@ jobs:
 
                   call.setOnClickListener {
 
-                      if (
-                          listing.phone.isEmpty()
-                      ) {
+                      if (listing.phone.isEmpty()) {
 
                           Toast.makeText(
                               this,
@@ -871,14 +934,25 @@ jobs:
 
                       } else {
 
-                          startActivity(
-                              Intent(
-                                  Intent.ACTION_DIAL,
-                                  Uri.parse(
-                                      "tel:${listing.phone}"
+                          try {
+
+                              startActivity(
+                                  Intent(
+                                      Intent.ACTION_DIAL,
+                                      Uri.parse(
+                                          "tel:${listing.phone}"
+                                      )
                                   )
                               )
-                          )
+
+                          } catch (_: Exception) {
+
+                              Toast.makeText(
+                                  this,
+                                  "Unable to open phone dialer.",
+                                  Toast.LENGTH_SHORT
+                              ).show()
+                          }
                       }
                   }
 
@@ -891,9 +965,7 @@ jobs:
 
                   whatsapp.setOnClickListener {
 
-                      if (
-                          listing.phone.isEmpty()
-                      ) {
+                      if (listing.phone.isEmpty()) {
 
                           Toast.makeText(
                               this,
@@ -903,26 +975,37 @@ jobs:
 
                       } else {
 
-                          val clean =
-                              listing.phone
-                                  .replace("+", "")
-                                  .replace(" ", "")
+                          try {
 
-                          val message =
-                              "Hello, I saw your ${listing.name} listing on FarmersMeet."
+                              val clean =
+                                  listing.phone
+                                      .replace("+", "")
+                                      .replace(" ", "")
 
-                          val uri =
-                              Uri.parse(
-                                  "https://wa.me/$clean?text=" +
-                                  Uri.encode(message)
+                              val message =
+                                  "Hello, I saw your ${listing.name} listing on FarmersMeet."
+
+                              val uri =
+                                  Uri.parse(
+                                      "https://wa.me/$clean?text=" +
+                                      Uri.encode(message)
+                                  )
+
+                              startActivity(
+                                  Intent(
+                                      Intent.ACTION_VIEW,
+                                      uri
+                                  )
                               )
 
-                          startActivity(
-                              Intent(
-                                  Intent.ACTION_VIEW,
-                                  uri
-                              )
-                          )
+                          } catch (_: Exception) {
+
+                              Toast.makeText(
+                                  this,
+                                  "Unable to open WhatsApp.",
+                                  Toast.LENGTH_SHORT
+                              ).show()
+                          }
                       }
                   }
 
@@ -937,9 +1020,7 @@ jobs:
 
                       delete.setOnClickListener {
 
-                          deleteListing(
-                              listing.id
-                          )
+                          deleteListing(listing.id)
 
                           Toast.makeText(
                               this,
@@ -1054,7 +1135,6 @@ jobs:
                       )
 
                   choosePhoto.setOnClickListener {
-
                       photoPicker.launch(
                           arrayOf("image/*")
                       )
@@ -1136,17 +1216,28 @@ jobs:
                               true
                           )
 
-                      saveListing(listing)
+                      try {
 
-                      Toast.makeText(
-                          this,
-                          "Listing posted successfully!",
-                          Toast.LENGTH_LONG
-                      ).show()
+                          saveListing(listing)
 
-                      showListings(
-                          listing.category
-                      )
+                          Toast.makeText(
+                              this,
+                              "Listing posted successfully!",
+                              Toast.LENGTH_LONG
+                          ).show()
+
+                          showListings(
+                              listing.category
+                          )
+
+                      } catch (_: Exception) {
+
+                          Toast.makeText(
+                              this,
+                              "Could not save listing.",
+                              Toast.LENGTH_LONG
+                          ).show()
+                      }
                   }
 
                   root.addView(post)
@@ -1202,12 +1293,16 @@ jobs:
                       )
 
                   val array =
-                      JSONArray(
-                          prefs.getString(
-                              "listings",
-                              "[]"
-                          ) ?: "[]"
-                      )
+                      try {
+                          JSONArray(
+                              prefs.getString(
+                                  "listings",
+                                  "[]"
+                              ) ?: "[]"
+                          )
+                      } catch (_: Exception) {
+                          JSONArray()
+                      }
 
                   val item =
                       JSONObject()
@@ -1234,8 +1329,7 @@ jobs:
                       .apply()
               }
 
-              private fun getListings():
-                  List<Listing> {
+              private fun getListings(): List<Listing> {
 
                   val prefs =
                       getSharedPreferences(
@@ -1243,51 +1337,60 @@ jobs:
                           Context.MODE_PRIVATE
                       )
 
+                  val raw =
+                      prefs.getString(
+                          "listings",
+                          "[]"
+                      ) ?: "[]"
+
                   val array =
-                      JSONArray(
-                          prefs.getString(
-                              "listings",
-                              "[]"
-                          ) ?: "[]"
-                      )
+                      try {
+                          JSONArray(raw)
+                      } catch (_: Exception) {
+                          JSONArray()
+                      }
 
                   val result =
                       mutableListOf<Listing>()
 
                   for (i in 0 until array.length()) {
 
-                      val item =
-                          array.getJSONObject(i)
+                      try {
 
-                      result.add(
-                          Listing(
-                              item.optLong(
-                                  "id",
-                                  i.toLong()
-                              ),
-                              item.optString("name"),
-                              item.optString("category"),
-                              item.optString("price"),
-                              item.optString("quantity"),
-                              item.optString("location"),
-                              item.optString("seller"),
-                              item.optString("phone"),
-                              item.optString("description"),
-                              item.optString("photoUri"),
-                              item.optBoolean(
-                                  "isMine",
-                                  false
+                          val item =
+                              array.getJSONObject(i)
+
+                          result.add(
+                              Listing(
+                                  item.optLong(
+                                      "id",
+                                      i.toLong()
+                                  ),
+                                  item.optString("name"),
+                                  item.optString("category"),
+                                  item.optString("price"),
+                                  item.optString("quantity"),
+                                  item.optString("location"),
+                                  item.optString("seller"),
+                                  item.optString("phone"),
+                                  item.optString("description"),
+                                  item.optString("photoUri"),
+                                  item.optBoolean(
+                                      "isMine",
+                                      false
+                                  )
                               )
                           )
-                      )
+
+                      } catch (_: Exception) {
+                          // Skip damaged listing instead of crashing.
+                      }
                   }
 
                   return result
               }
 
-              private fun isFavorite(
-                  id: Long
-              ): Boolean {
+              private fun isFavorite(id: Long): Boolean {
 
                   val prefs =
                       getSharedPreferences(
@@ -1306,9 +1409,7 @@ jobs:
                   )
               }
 
-              private fun toggleFavorite(
-                  id: Long
-              ) {
+              private fun toggleFavorite(id: Long) {
 
                   val prefs =
                       getSharedPreferences(
@@ -1339,9 +1440,7 @@ jobs:
                       .apply()
               }
 
-              private fun deleteListing(
-                  id: Long
-              ) {
+              private fun deleteListing(id: Long) {
 
                   val prefs =
                       getSharedPreferences(
@@ -1350,25 +1449,33 @@ jobs:
                       )
 
                   val array =
-                      JSONArray(
-                          prefs.getString(
-                              "listings",
-                              "[]"
-                          ) ?: "[]"
-                      )
+                      try {
+                          JSONArray(
+                              prefs.getString(
+                                  "listings",
+                                  "[]"
+                              ) ?: "[]"
+                          )
+                      } catch (_: Exception) {
+                          JSONArray()
+                      }
 
-                  val newArray =
-                      JSONArray()
+                  val newArray = JSONArray()
 
                   for (i in 0 until array.length()) {
 
-                      val item =
-                          array.getJSONObject(i)
+                      try {
 
-                      if (
-                          item.optLong("id") != id
-                      ) {
-                          newArray.put(item)
+                          val item =
+                              array.getJSONObject(i)
+
+                          if (
+                              item.optLong("id") != id
+                          ) {
+                              newArray.put(item)
+                          }
+
+                      } catch (_: Exception) {
                       }
                   }
 
@@ -1395,7 +1502,7 @@ jobs:
                       .apply()
               }
 
-              private fun seedListings() {
+              private fun seedListingsSafely() {
 
                   val prefs =
                       getSharedPreferences(
@@ -1542,16 +1649,24 @@ jobs:
                           )
                       )
 
-                  samples.forEach {
-                      saveListing(it)
-                  }
+                  try {
 
-                  prefs.edit()
-                      .putBoolean(
-                          "seeded",
-                          true
-                      )
-                      .apply()
+                      samples.forEach {
+                          saveListing(it)
+                      }
+
+                      prefs.edit()
+                          .putBoolean(
+                              "seeded",
+                              true
+                          )
+                          .apply()
+
+                  } catch (_: Exception) {
+
+                      // Startup will continue even if sample data
+                      // cannot be written.
+                  }
               }
           }
           EOF
@@ -1559,27 +1674,39 @@ jobs:
       - name: Verify project files
         shell: bash
         run: |
+          set -e
+
           test -f FarmersMeet/settings.gradle
           test -f FarmersMeet/build.gradle
           test -f FarmersMeet/app/build.gradle
           test -f FarmersMeet/app/src/main/AndroidManifest.xml
           test -f FarmersMeet/app/src/main/res/values/themes.xml
           test -f FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt
-          echo "FarmersMeet Stage 7 files verified."
+
+          echo "FarmersMeet Stage 8 files verified."
 
       - name: Build APK
         working-directory: FarmersMeet
-        run: gradle :app:assembleDebug
+        run: |
+          gradle :app:assembleDebug --stacktrace
 
       - name: Verify APK
         shell: bash
         run: |
-          test -f FarmersMeet/app/build/outputs/apk/debug/app-debug.apk
-          echo "FarmersMeet Stage 7 APK created successfully."
+          set -e
+
+          APK="FarmersMeet/app/build/outputs/apk/debug/app-debug.apk"
+
+          test -f "$APK"
+
+          echo "APK found:"
+          ls -lh "$APK"
+
+          echo "FarmersMeet Stage 8 APK created successfully."
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FarmersMeet-Stage7-APK
+          name: FarmersMeet-Stage8-APK
           path: FarmersMeet/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+          if-no-files-found: error      
