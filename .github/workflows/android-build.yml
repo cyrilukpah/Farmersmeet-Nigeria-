@@ -1,4 +1,4 @@
-name: FarmersMeet Stage 10 APK
+name: FarmersMeet Stage 10 Firebase Build
 
 on:
   workflow_dispatch:
@@ -24,212 +24,274 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+          cache: gradle
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          packages: 'platform-tools'
-          accept-android-sdk-licenses: true
-          log-accepted-android-sdk-licenses: false
+        uses: android-actions/setup-android@v3
 
-      - name: Verify Android SDK 35
+      - name: Install Android SDK packages
         shell: bash
         run: |
           set -e
 
-          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
 
-          echo "ANDROID_HOME=$SDK"
-          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-$SDK}"
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
 
-          echo
-          echo "Checking Android platform 35..."
-          test -d "$SDK/platforms/android-35"
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
-          echo "Android platform 35: OK"
-
-          echo
-          echo "Checking Build Tools 35.0.0..."
-          test -d "$SDK/build-tools/35.0.0"
-
-          echo "Build Tools 35.0.0: OK"
-
-          echo
-          echo "Checking platform-tools..."
-          test -x "$SDK/platform-tools/adb"
-
-          echo "Platform-tools: OK"
-
-          echo
-          echo "===== ANDROID SDK READY ====="
-
-      - name: Show repository structure
+      - name: Verify repository structure
         shell: bash
         run: |
           set -e
 
-          echo "===== REPOSITORY ROOT ====="
-          find . -maxdepth 2 -type f | sort
+          echo "Repository root:"
+          pwd
 
-      - name: Verify Android project
-        shell: bash
-        run: |
-          set -e
-
-          echo "Checking Android project..."
+          echo
+          echo "Repository contents:"
+          find . -maxdepth 3 -type f | sort
 
           test -f settings.gradle
-          test -d app
+          test -f build.gradle
           test -f app/build.gradle
+          test -f app/src/main/AndroidManifest.xml
 
-          echo "settings.gradle: OK"
-          echo "app/: OK"
-          echo "app/build.gradle: OK"
+          echo
+          echo "Android project files found at repository root."
 
-      - name: Prepare Firebase configuration
+      - name: Verify Firebase configuration
         shell: bash
         run: |
           set -e
 
-          echo "Checking Firebase configuration..."
-
-          if [ -f "google-services.json" ]; then
-            echo "Found google-services.json in repository root."
-
-          elif [ -f "Settings/google-services.json" ]; then
-            echo "Found Settings/google-services.json."
-            cp "Settings/google-services.json" "google-services.json"
-
+          if [ -f app/google-services.json ]; then
+            echo "Firebase configuration found at app/google-services.json"
+          elif [ -f Settings/google-services.json ]; then
+            echo "Firebase configuration found at Settings/google-services.json"
+            cp Settings/google-services.json app/google-services.json
+            echo "Copied Firebase configuration into app/"
           else
             echo "ERROR: google-services.json was not found."
             echo
-            echo "Expected:"
-            echo "  ./google-services.json"
+            echo "Expected either:"
+            echo "  app/google-services.json"
             echo "or:"
-            echo "  ./Settings/google-services.json"
+            echo "  Settings/google-services.json"
             exit 1
           fi
 
-          cp "google-services.json" "app/google-services.json"
+          test -f app/google-services.json
 
-          test -s "app/google-services.json"
-
-          echo "Firebase configuration: OK"
-
-      - name: Prepare root Gradle build file
+      - name: Replace root settings.gradle
         shell: bash
         run: |
           set -e
 
-          if [ -f "build.gradle" ]; then
-            echo "Root build.gradle found."
+          cat > settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
 
-          elif [ -f "app-build.gradle" ]; then
-            echo "Root build.gradle not found."
-            echo "Using existing app-build.gradle."
-            cp "app-build.gradle" "build.gradle"
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
 
-          else
-            echo "ERROR: No root build.gradle or app-build.gradle found."
-            exit 1
-          fi
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
 
-      - name: Show Gradle configuration
+          rootProject.name = "FarmersMeetNigeria"
+
+          include(":app")
+          EOF
+
+      - name: Replace root build.gradle
         shell: bash
         run: |
           set -e
 
-          echo "===== settings.gradle ====="
-          cat settings.gradle
+          cat > build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.7.3' apply false
+              id 'org.jetbrains.kotlin.android' version '2.0.21' apply false
+              id 'com.google.gms.google-services' version '4.5.0' apply false
+          }
+          EOF
 
-          echo
-          echo "===== build.gradle ====="
-          cat build.gradle
-
-          echo
-          echo "===== app/build.gradle ====="
-          cat app/build.gradle
-
-      - name: Set up Gradle 8.9
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "8.9"
-
-      - name: Verify Gradle
+      - name: Replace gradle.properties
         shell: bash
         run: |
           set -e
 
-          gradle --version
+          cat > gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          android.nonTransitiveRClass=true
+          EOF
+
+      - name: Replace app build.gradle
+        shell: bash
+        run: |
+          set -e
+
+          cat > app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+              id 'org.jetbrains.kotlin.android'
+              id 'com.google.gms.google-services'
+          }
+
+          android {
+              namespace 'ng.farmersmeet.nigeria'
+              compileSdk 35
+
+              defaultConfig {
+                  applicationId 'ng.farmersmeet.nigeria'
+                  minSdk 24
+                  targetSdk 35
+                  versionCode 10
+                  versionName "10.0"
+              }
+
+              buildTypes {
+                  debug {
+                      debuggable true
+                      minifyEnabled false
+                  }
+
+                  release {
+                      minifyEnabled false
+                  }
+              }
+
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.core:core-ktx:1.15.0'
+              implementation 'androidx.appcompat:appcompat:1.7.0'
+              implementation 'androidx.activity:activity-ktx:1.10.1'
+
+              implementation platform('com.google.firebase:firebase-bom:34.19.0')
+              implementation 'com.google.firebase:firebase-auth'
+          }
+          EOF
+
+      - name: Check Firebase package compatibility
+        shell: bash
+        run: |
+          set -e
+
+          echo "Checking Firebase Android package..."
+
+          python3 - <<'PY'
+          import json
+          import sys
+
+          with open("app/google-services.json", "r", encoding="utf-8") as f:
+              data = json.load(f)
+
+          clients = data.get("client", [])
+
+          expected = "ng.farmersmeet.nigeria"
+
+          packages = []
+
+          for client in clients:
+              package_name = (
+                  client
+                  .get("client_info", {})
+                  .get("android_client_info", {})
+                  .get("package_name")
+              )
+
+              if package_name:
+                  packages.append(package_name)
+
+          print("Firebase Android package names:")
+          for package_name in packages:
+              print(" -", package_name)
+
+          if expected not in packages:
+              print()
+              print("ERROR: google-services.json does not contain")
+              print("the Android package:")
+              print(expected)
+              print()
+              print("The Firebase Android app must use this exact package name.")
+              sys.exit(1)
+
+          print()
+          print("Firebase package name is correct.")
+          PY
 
       - name: Create Gradle wrapper
         shell: bash
         run: |
           set -e
 
-          if [ ! -f "gradlew" ]; then
-            echo "Creating Gradle 8.9 wrapper..."
-
+          if [ ! -f gradlew ]; then
             gradle wrapper \
               --gradle-version 8.9 \
               --distribution-type bin
-          else
-            echo "Gradle wrapper already exists."
           fi
 
           chmod +x gradlew
 
-          test -f gradlew
-          test -f gradle/wrapper/gradle-wrapper.properties
-
-      - name: Verify Gradle wrapper
+      - name: Clean previous Gradle state
         shell: bash
         run: |
           set -e
 
-          chmod +x gradlew
+          ./gradlew --no-daemon clean
 
-          ./gradlew --version
-
-      - name: Clean project
+      - name: Build Stage 10 debug APK
         shell: bash
         run: |
           set -e
-
-          ./gradlew \
-            --no-daemon \
-            clean
-
-      - name: Build FarmersMeet Stage 10
-        shell: bash
-        run: |
-          set -e
-
-          echo "========================================"
-          echo " BUILDING FARMERSMEET STAGE 10"
-          echo "========================================"
 
           ./gradlew \
             --no-daemon \
             --stacktrace \
-            assembleDebug
+            :app:assembleDebug
 
-      - name: Verify APK
+      - name: Verify Stage 10 APK
         shell: bash
         run: |
           set -e
 
           APK="app/build/outputs/apk/debug/app-debug.apk"
 
-          echo "Checking APK..."
-
-          test -f "$APK"
+          if [ ! -f "$APK" ]; then
+            echo "ERROR: APK was not created."
+            echo
+            echo "Available APK files:"
+            find app/build -type f -name "*.apk" -print || true
+            exit 1
+          fi
 
           echo
-          echo "========================================"
-          echo " FARMERSMEET STAGE 10 SUCCESS"
-          echo "========================================"
-
+          echo "=========================================="
+          echo "STAGE 10 BUILD SUCCESSFUL"
+          echo "=========================================="
+          echo
           ls -lh "$APK"
 
       - name: Upload Stage 10 APK
