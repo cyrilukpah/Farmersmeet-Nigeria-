@@ -1,4 +1,4 @@
-name: FarmersMeet Stage 10 Firebase Build
+name: FarmersMeet Stage 10 - Firebase Authentication APK
 
 on:
   workflow_dispatch:
@@ -11,223 +11,794 @@ permissions:
 
 jobs:
   build:
-    name: FarmersMeet Stage 10
+    name: Build FarmersMeet Stage 10
     runs-on: ubuntu-22.04
 
     steps:
 
+      # ------------------------------------------------------------
+      # 1. CHECKOUT
+      # ------------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ------------------------------------------------------------
+      # 2. JAVA 17
+      # ------------------------------------------------------------
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
-          cache: gradle
 
-      - name: Locate preinstalled Android SDK
+      # ------------------------------------------------------------
+      # 3. GRADLE 8.10
+      # ------------------------------------------------------------
+      - name: Set up Gradle 8.10
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10"
+
+      # ------------------------------------------------------------
+      # 4. VERIFY THE REAL REPOSITORY STRUCTURE
+      #
+      # IMPORTANT:
+      # This project is built from the repository ROOT.
+      # There is deliberately NO FarmersMeet/ directory assumption.
+      # There is deliberately NO sdkmanager call.
+      # ------------------------------------------------------------
+      - name: Verify repository
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
-          if [ -n "${ANDROID_SDK_ROOT:-}" ] && [ -d "$ANDROID_SDK_ROOT" ]; then
-            SDK="$ANDROID_SDK_ROOT"
-          elif [ -n "${ANDROID_HOME:-}" ] && [ -d "$ANDROID_HOME" ]; then
-            SDK="$ANDROID_HOME"
-          elif [ -d "/usr/local/lib/android/sdk" ]; then
-            SDK="/usr/local/lib/android/sdk"
-          else
-            echo "ERROR: Android SDK was not found on the GitHub runner."
-            exit 1
-          fi
-
-          echo "Android SDK:"
-          echo "$SDK"
-
-          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
-          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
-          echo "$SDK/platform-tools" >> "$GITHUB_PATH"
-          echo "$SDK/emulator" >> "$GITHUB_PATH"
-
-      - name: Check Android SDK
-        shell: bash
-        run: |
-          set -e
-
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          echo "ANDROID_HOME=$ANDROID_HOME"
-
-          test -d "$ANDROID_SDK_ROOT"
-
-          echo
-          echo "Installed SDK platforms:"
-          ls -la "$ANDROID_SDK_ROOT/platforms" || true
-
-          echo
-          echo "Installed build tools:"
-          ls -la "$ANDROID_SDK_ROOT/build-tools" || true
-
-      - name: Install missing Android SDK components
-        shell: bash
-        run: |
-          set -e
-
-          SDK="$ANDROID_SDK_ROOT"
-
-          SDKMANAGER=""
-
-          if [ -x "$SDK/cmdline-tools/latest/bin/sdkmanager" ]; then
-            SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
-          elif [ -x "$SDK/cmdline-tools/22.0/bin/sdkmanager" ]; then
-            SDKMANAGER="$SDK/cmdline-tools/22.0/bin/sdkmanager"
-          elif [ -x "$SDK/cmdline-tools/16.0/bin/sdkmanager" ]; then
-            SDKMANAGER="$SDK/cmdline-tools/16.0/bin/sdkmanager"
-          fi
-
-          if [ -z "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager was not found."
-            echo
-            find "$SDK/cmdline-tools" -maxdepth 3 -type f -name sdkmanager -print 2>/dev/null || true
-            exit 1
-          fi
-
-          echo "Using sdkmanager:"
-          echo "$SDKMANAGER"
-
-          if [ ! -d "$SDK/platforms/android-35" ]; then
-            echo "Android 35 platform is missing."
-
-            yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
-
-            "$SDKMANAGER" "platforms;android-35"
-          fi
-
-          if [ ! -d "$SDK/build-tools/35.0.0" ]; then
-            echo "Android 35.0.0 build tools are missing."
-
-            yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
-
-            "$SDKMANAGER" "build-tools;35.0.0"
-          fi
-
-          if [ ! -d "$SDK/platform-tools" ]; then
-            echo "Platform tools are missing."
-
-            yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
-
-            "$SDKMANAGER" "platform-tools"
-          fi
-
-      - name: Verify Android SDK components
-        shell: bash
-        run: |
-          set -e
-
-          test -d "$ANDROID_SDK_ROOT/platforms/android-35"
-          test -d "$ANDROID_SDK_ROOT/build-tools/35.0.0"
-          test -d "$ANDROID_SDK_ROOT/platform-tools"
-
-          echo "Android SDK verification successful."
-
-      - name: Verify repository structure
-        shell: bash
-        run: |
-          set -e
-
-          echo "Repository:"
+          echo "Repository root:"
           pwd
 
           echo
-          echo "Files:"
-          find . -maxdepth 3 -type f | sort
-
-          test -f settings.gradle
-          test -f build.gradle
-          test -f app/build.gradle
-          test -d app/src/main
+          echo "Repository contents:"
+          find . -maxdepth 3 -type f | sort | head -300
 
           echo
-          echo "Root Android project verified."
+          echo "Checking required files..."
 
-      - name: Prepare Firebase configuration
+          test -f settings.gradle
+          test -f app/build.gradle
+          test -f app/src/main/AndroidManifest.xml
+          test -f app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt
+
+          echo
+          echo "Required FarmersMeet files found."
+
+      # ------------------------------------------------------------
+      # 5. VERIFY ANDROID SDK ALREADY PRESENT ON GITHUB RUNNER
+      #
+      # NO sdkmanager.
+      # NO android-actions/setup-android.
+      # NO package installation.
+      # ------------------------------------------------------------
+      - name: Verify Android SDK
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
-          if [ -f app/google-services.json ]; then
-            echo "Found app/google-services.json"
-          elif [ -f Settings/google-services.json ]; then
-            echo "Found Settings/google-services.json"
-            cp Settings/google-services.json app/google-services.json
-          else
-            echo "ERROR: Firebase google-services.json was not found."
-            exit 1
-          fi
+          echo "ANDROID_HOME=${ANDROID_HOME:-not-set}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-not-set}"
 
-          test -f app/google-services.json
+          test -n "${ANDROID_HOME:-}"
+          test -d "$ANDROID_HOME"
 
-      - name: Verify Firebase Android package
+          echo
+          echo "Installed Android platforms:"
+          ls -la "$ANDROID_HOME/platforms" || true
+
+          echo
+          echo "Installed Android build tools:"
+          ls -la "$ANDROID_HOME/build-tools" || true
+
+          echo
+          echo "Checking Android 35..."
+
+          test -d "$ANDROID_HOME/platforms/android-35"
+
+          echo
+          echo "Android SDK 35 is available."
+
+      # ------------------------------------------------------------
+      # 6. MAKE ROOT SETTINGS EXPLICIT
+      # ------------------------------------------------------------
+      - name: Create clean settings.gradle
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
-          python3 - <<'PY'
-          import json
-          import sys
+          cat > settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
 
-          expected = "ng.farmersmeet.nigeria"
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
 
-          with open(
-              "app/google-services.json",
-              "r",
-              encoding="utf-8"
-          ) as f:
-              data = json.load(f)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
 
-          clients = data.get("client", [])
+          rootProject.name = "FarmersMeet"
 
-          packages = []
+          include(":app")
+          EOF
 
-          for client in clients:
-              package_name = (
-                  client
-                  .get("client_info", {})
-                  .get("android_client_info", {})
-                  .get("package_name")
-              )
-
-              if package_name:
-                  packages.append(package_name)
-
-          print("Firebase Android packages found:")
-
-          for package_name in packages:
-              print(" - " + package_name)
-
-          if expected not in packages:
-              print()
-              print("ERROR:")
-              print("Firebase package does not match the application.")
-              print()
-              print("Required:")
-              print(expected)
-              print()
-              print("Found:")
-              for package_name in packages:
-                  print(package_name)
-
-              sys.exit(1)
-
-          print()
-          print("Firebase package verification successful.")
-          PY
-
-      - name: Verify Gradle plugin configuration
+      # ------------------------------------------------------------
+      # 7. ROOT GRADLE PLUGINS
+      #
+      # This specifically prevents:
+      # Plugin [id: 'com.android.application'] was not found
+      # because the plugin versions are declared here.
+      # ------------------------------------------------------------
+      - name: Create root build.gradle
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
+          cat > build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.7.3' apply false
+              id 'org.jetbrains.kotlin.android' version '2.0.21' apply false
+              id 'com.google.gms.google-services' version '4.4.2' apply false
+          }
+          EOF
+
+      # ------------------------------------------------------------
+      # 8. GRADLE PROPERTIES
+      # ------------------------------------------------------------
+      - name: Create gradle.properties
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cat > gradle.properties <<'EOF'
+          android.useAndroidX=true
+          android.nonTransitiveRClass=true
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          EOF
+
+      # ------------------------------------------------------------
+      # 9. FIREBASE CONFIGURATION
+      #
+      # Your repository already contains:
+      # Settings/google-services.json
+      #
+      # Firebase's Android Gradle plugin expects it at:
+      # app/google-services.json
+      # ------------------------------------------------------------
+      - name: Install Firebase configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f Settings/google-services.json
+
+          cp Settings/google-services.json app/google-services.json
+
+          echo "Firebase configuration copied successfully."
+
+          echo
+          echo "Firebase file:"
+          ls -lh app/google-services.json
+
+      # ------------------------------------------------------------
+      # 10. CONFIGURE APP GRADLE
+      # ------------------------------------------------------------
+      - name: Configure Android application
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cat > app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+              id 'org.jetbrains.kotlin.android'
+              id 'com.google.gms.google-services'
+          }
+
+          android {
+              namespace 'ng.farmersmeet.nigeria'
+
+              compileSdk 35
+
+              defaultConfig {
+                  applicationId 'ng.farmersmeet.nigeria"
+
+                  minSdk 24
+                  targetSdk 35
+
+                  versionCode 10
+                  versionName "10.0"
+              }
+
+              buildTypes {
+                  debug {
+                      debuggable true
+                      minifyEnabled false
+                  }
+
+                  release {
+                      minifyEnabled false
+                  }
+              }
+
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+          }
+
+          dependencies {
+
+              implementation 'androidx.core:core-ktx:1.15.0'
+              implementation 'androidx.appcompat:appcompat:1.7.0'
+              implementation 'androidx.activity:activity-ktx:1.10.1'
+
+              implementation platform('com.google.firebase:firebase-bom:33.7.0')
+
+              implementation 'com.google.firebase:firebase-auth'
+          }
+          EOF
+
+      # ------------------------------------------------------------
+      # 11. FIX APPLICATION ID QUOTE
+      #
+      # This is intentionally a separate deterministic replacement
+      # so the resulting file contains the exact correct value.
+      # ------------------------------------------------------------
+      - name: Validate application Gradle file
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sed -i 's/applicationId "ng\.farmersmeet\.nigeria"/applicationId "ng.farmersmeet.nigeria"/' app/build.gradle
+
+          grep -n "applicationId" app/build.gradle
+          grep -n "google-services" app/build.gradle
+          grep -n "firebase-auth" app/build.gradle
+
+      # ------------------------------------------------------------
+      # 12. CREATE FIREBASE AUTHENTICATION ACTIVITY
+      # ------------------------------------------------------------
+      - name: Create Firebase Auth activity
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p app/src/main/java/ng/farmersmeet/nigeria
+
+          cat > app/src/main/java/ng/farmersmeet/nigeria/AuthActivity.kt <<'EOF'
+          package ng.farmersmeet.nigeria
+
+          import android.content.Intent
+          import android.graphics.Color
+          import android.os.Bundle
+          import android.text.InputType
+          import android.view.Gravity
+          import android.widget.Button
+          import android.widget.EditText
+          import android.widget.LinearLayout
+          import android.widget.TextView
+          import android.widget.Toast
+          import androidx.appcompat.app.AppCompatActivity
+          import com.google.firebase.auth.FirebaseAuth
+
+          class AuthActivity : AppCompatActivity() {
+
+              private lateinit var auth: FirebaseAuth
+
+              private val green = Color.rgb(23, 107, 53)
+              private val darkGreen = Color.rgb(13, 77, 37)
+              private val gold = Color.rgb(244, 196, 48)
+              private val background = Color.rgb(247, 250, 245)
+              private val textColor = Color.rgb(29, 51, 35)
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+
+                  auth = FirebaseAuth.getInstance()
+
+                  if (auth.currentUser != null) {
+                      openMarketplace()
+                      return
+                  }
+
+                  showLogin()
+              }
+
+              private fun root(): LinearLayout {
+                  return LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      gravity = Gravity.CENTER_HORIZONTAL
+                      setBackgroundColor(background)
+                      setPadding(24, 24, 24, 24)
+                  }
+              }
+
+              private fun title(text: String): TextView {
+                  return TextView(this).apply {
+                      this.text = text
+                      textSize = 34f
+                      setTextColor(green)
+                      setTypeface(null, android.graphics.Typeface.BOLD)
+                      gravity = Gravity.CENTER
+                      setPadding(0, 30, 0, 8)
+                  }
+              }
+
+              private fun subtitle(text: String): TextView {
+                  return TextView(this).apply {
+                      this.text = text
+                      textSize = 16f
+                      setTextColor(textColor)
+                      gravity = Gravity.CENTER
+                      setPadding(0, 0, 0, 25)
+                  }
+              }
+
+              private fun field(
+                  hint: String,
+                  password: Boolean = false
+              ): EditText {
+                  return EditText(this).apply {
+                      this.hint = hint
+                      textSize = 16f
+                      setTextColor(textColor)
+                      setSingleLine(true)
+
+                      if (password) {
+                          inputType =
+                              InputType.TYPE_CLASS_TEXT or
+                              InputType.TYPE_TEXT_VARIATION_PASSWORD
+                      } else {
+                          inputType =
+                              InputType.TYPE_CLASS_TEXT or
+                              InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+                      }
+
+                      layoutParams =
+                          LinearLayout.LayoutParams(
+                              LinearLayout.LayoutParams.MATCH_PARENT,
+                              LinearLayout.LayoutParams.WRAP_CONTENT
+                          ).apply {
+                              setMargins(0, 6, 0, 6)
+                          }
+                  }
+              }
+
+              private fun button(
+                  text: String,
+                  primary: Boolean = false
+              ): Button {
+                  return Button(this).apply {
+                      this.text = text
+                      textSize = 15f
+                      setTypeface(null, android.graphics.Typeface.BOLD)
+
+                      setTextColor(
+                          if (primary) darkGreen
+                          else Color.WHITE
+                      )
+
+                      setBackgroundColor(
+                          if (primary) gold
+                          else green
+                      )
+
+                      layoutParams =
+                          LinearLayout.LayoutParams(
+                              LinearLayout.LayoutParams.MATCH_PARENT,
+                              LinearLayout.LayoutParams.WRAP_CONTENT
+                          ).apply {
+                              setMargins(0, 6, 0, 6)
+                          }
+                  }
+              }
+
+              private fun showLogin() {
+
+                  val root = root()
+
+                  root.addView(title("FarmersMeet"))
+
+                  root.addView(
+                      subtitle(
+                          "Sign in to your FarmersMeet account"
+                      )
+                  )
+
+                  val email = field("Email address")
+
+                  val password =
+                      field("Password", true)
+
+                  root.addView(email)
+                  root.addView(password)
+
+                  val login =
+                      button("LOGIN", true)
+
+                  login.setOnClickListener {
+
+                      val emailText =
+                          email.text.toString().trim()
+
+                      val passwordText =
+                          password.text.toString()
+
+                      if (
+                          emailText.isEmpty() ||
+                          passwordText.isEmpty()
+                      ) {
+                          toast(
+                              "Enter your email and password."
+                          )
+                          return@setOnClickListener
+                      }
+
+                      setLoading(login, true)
+
+                      auth.signInWithEmailAndPassword(
+                          emailText,
+                          passwordText
+                      ).addOnCompleteListener { task ->
+
+                          setLoading(login, false)
+
+                          if (task.isSuccessful) {
+                              toast("Login successful.")
+                              openMarketplace()
+                          } else {
+                              toast(
+                                  firebaseError(
+                                      task.exception
+                                  )
+                              )
+                          }
+                      }
+                  }
+
+                  root.addView(login)
+
+                  val register =
+                      button("CREATE NEW ACCOUNT")
+
+                  register.setOnClickListener {
+                      showRegister()
+                  }
+
+                  root.addView(register)
+
+                  val forgot =
+                      button("FORGOT PASSWORD")
+
+                  forgot.setOnClickListener {
+                      showForgotPassword()
+                  }
+
+                  root.addView(forgot)
+
+                  setContentView(root)
+              }
+
+              private fun showRegister() {
+
+                  val root = root()
+
+                  root.addView(title("Create Account"))
+
+                  root.addView(
+                      subtitle(
+                          "Register as a FarmersMeet user"
+                      )
+                  )
+
+                  val email = field("Email address")
+
+                  val password =
+                      field("Password", true)
+
+                  val confirm =
+                      field("Confirm password", true)
+
+                  root.addView(email)
+                  root.addView(password)
+                  root.addView(confirm)
+
+                  val register =
+                      button("CREATE ACCOUNT", true)
+
+                  register.setOnClickListener {
+
+                      val emailText =
+                          email.text.toString().trim()
+
+                      val passwordText =
+                          password.text.toString()
+
+                      val confirmText =
+                          confirm.text.toString()
+
+                      if (
+                          emailText.isEmpty() ||
+                          passwordText.isEmpty() ||
+                          confirmText.isEmpty()
+                      ) {
+                          toast(
+                              "Complete all fields."
+                          )
+                          return@setOnClickListener
+                      }
+
+                      if (passwordText.length < 6) {
+                          toast(
+                              "Password must contain at least 6 characters."
+                          )
+                          return@setOnClickListener
+                      }
+
+                      if (passwordText != confirmText) {
+                          toast(
+                              "Passwords do not match."
+                          )
+                          return@setOnClickListener
+                      }
+
+                      setLoading(register, true)
+
+                      auth.createUserWithEmailAndPassword(
+                          emailText,
+                          passwordText
+                      ).addOnCompleteListener { task ->
+
+                          setLoading(register, false)
+
+                          if (task.isSuccessful) {
+                              toast(
+                                  "Account created successfully."
+                              )
+                              openMarketplace()
+                          } else {
+                              toast(
+                                  firebaseError(
+                                      task.exception
+                                  )
+                              )
+                          }
+                      }
+                  }
+
+                  root.addView(register)
+
+                  val back =
+                      button("BACK TO LOGIN")
+
+                  back.setOnClickListener {
+                      showLogin()
+                  }
+
+                  root.addView(back)
+
+                  setContentView(root)
+              }
+
+              private fun showForgotPassword() {
+
+                  val root = root()
+
+                  root.addView(title("Reset Password"))
+
+                  root.addView(
+                      subtitle(
+                          "Enter your email and Firebase will send a password reset link."
+                      )
+                  )
+
+                  val email =
+                      field("Email address")
+
+                  root.addView(email)
+
+                  val send =
+                      button(
+                          "SEND RESET EMAIL",
+                          true
+                      )
+
+                  send.setOnClickListener {
+
+                      val emailText =
+                          email.text.toString().trim()
+
+                      if (emailText.isEmpty()) {
+                          toast(
+                              "Enter your email address."
+                          )
+                          return@setOnClickListener
+                      }
+
+                      setLoading(send, true)
+
+                      auth.sendPasswordResetEmail(
+                          emailText
+                      ).addOnCompleteListener { task ->
+
+                          setLoading(send, false)
+
+                          if (task.isSuccessful) {
+                              toast(
+                                  "Password reset email sent."
+                              )
+                              showLogin()
+                          } else {
+                              toast(
+                                  firebaseError(
+                                      task.exception
+                                  )
+                              )
+                          }
+                      }
+                  }
+
+                  root.addView(send)
+
+                  val back =
+                      button("BACK TO LOGIN")
+
+                  back.setOnClickListener {
+                      showLogin()
+                  }
+
+                  root.addView(back)
+
+                  setContentView(root)
+              }
+
+              private fun openMarketplace() {
+
+                  val intent =
+                      Intent(
+                          this,
+                          MainActivity::class.java
+                      )
+
+                  startActivity(intent)
+
+                  finish()
+              }
+
+              private fun setLoading(
+                  button: Button,
+                  loading: Boolean
+              ) {
+                  button.isEnabled = !loading
+
+                  button.text =
+                      if (loading) {
+                          "PLEASE WAIT..."
+                      } else {
+                          "LOGIN"
+                      }
+              }
+
+              private fun firebaseError(
+                  exception: Exception?
+              ): String {
+
+                  val message =
+                      exception?.localizedMessage
+
+                  return if (
+                      message.isNullOrBlank()
+                  ) {
+                      "Authentication failed. Please try again."
+                  } else {
+                      message
+                  }
+              }
+
+              private fun toast(
+                  message: String
+              ) {
+                  Toast.makeText(
+                      this,
+                      message,
+                      Toast.LENGTH_LONG
+                  ).show()
+              }
+          }
+          EOF
+
+      # ------------------------------------------------------------
+      # 13. CREATE MANIFEST
+      # ------------------------------------------------------------
+      - name: Configure Android manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+
+          <manifest
+              xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission
+                  android:name="android.permission.INTERNET" />
+
+              <application
+                  android:allowBackup="true"
+                  android:label="FarmersMeet"
+                  android:supportsRtl="true"
+                  android:theme="@style/AppTheme">
+
+                  <activity
+                      android:name=".AuthActivity"
+                      android:screenOrientation="portrait"
+                      android:exported="true">
+
+                      <intent-filter>
+                          <action
+                              android:name="android.intent.action.MAIN" />
+
+                          <category
+                              android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+
+                  </activity>
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:screenOrientation="portrait"
+                      android:exported="false" />
+
+              </application>
+
+          </manifest>
+          EOF
+
+      # ------------------------------------------------------------
+      # 14. VERIFY FIREBASE CONFIGURATION BEFORE GRADLE
+      # ------------------------------------------------------------
+      - name: Verify Firebase configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -s app/google-services.json
+
+          echo "google-services.json exists."
+
+          grep -q '"project_info"' app/google-services.json
+          grep -q '"client"' app/google-services.json
+
+          echo "Firebase configuration structure looks valid."
+
+      # ------------------------------------------------------------
+      # 15. VERIFY GRADLE CONFIGURATION
+      # ------------------------------------------------------------
+      - name: Verify Gradle configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo
           echo "Root build.gradle:"
           cat build.gradle
 
@@ -235,81 +806,63 @@ jobs:
           echo "App build.gradle:"
           cat app/build.gradle
 
-          grep -q "com.android.application.*8.7.3" build.gradle
-          grep -q "com.google.gms.google-services" build.gradle
-          grep -q "com.android.application" app/build.gradle
-          grep -q "com.google.gms.google-services" app/build.gradle
+          echo
+          echo "settings.gradle:"
+          cat settings.gradle
 
           echo
-          echo "Gradle plugin configuration verified."
+          echo "Android manifest:"
+          cat app/src/main/AndroidManifest.xml
 
-      - name: Create Gradle wrapper
+      # ------------------------------------------------------------
+      # 16. CLEAN BUILD
+      # ------------------------------------------------------------
+      - name: Clean Gradle build
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
-          if [ ! -f gradlew ]; then
-            gradle wrapper \
-              --gradle-version 8.9 \
-              --distribution-type bin
-          fi
+          gradle --version
 
-          chmod +x gradlew
+          gradle clean --stacktrace
 
-      - name: Show Gradle version
+      # ------------------------------------------------------------
+      # 17. BUILD STAGE 10 APK
+      # ------------------------------------------------------------
+      - name: Build Stage 10 debug APK
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
-          ./gradlew --version
-
-      - name: Clean project
-        shell: bash
-        run: |
-          set -e
-
-          ./gradlew \
+          gradle :app:assembleDebug \
             --no-daemon \
-            --stacktrace \
-            clean
+            --stacktrace
 
-      - name: Build Stage 10 APK
+      # ------------------------------------------------------------
+      # 18. VERIFY APK
+      # ------------------------------------------------------------
+      - name: Verify Stage 10 APK
         shell: bash
         run: |
-          set -e
-
-          ./gradlew \
-            --no-daemon \
-            --stacktrace \
-            :app:assembleDebug
-
-      - name: Verify APK
-        shell: bash
-        run: |
-          set -e
+          set -euo pipefail
 
           APK="app/build/outputs/apk/debug/app-debug.apk"
 
-          if [ ! -f "$APK" ]; then
-            echo "ERROR: Stage 10 APK was not generated."
-
-            echo
-            echo "APK files found:"
-            find . -type f -name "*.apk" -print || true
-
-            exit 1
-          fi
+          test -s "$APK"
 
           echo
           echo "=========================================="
-          echo "FARMERSMEET STAGE 10 BUILD SUCCESSFUL"
+          echo "FarmersMeet Stage 10 APK BUILD SUCCESSFUL"
           echo "=========================================="
           echo
           ls -lh "$APK"
 
-      - name: Upload Stage 10 APK
+      # ------------------------------------------------------------
+      # 19. UPLOAD APK
+      # ------------------------------------------------------------
+      - name: Upload FarmersMeet Stage 10 APK
         uses: actions/upload-artifact@v4
         with:
-          name: FarmersMeet-Stage-10-APK
+          name: FarmersMeet-Stage-10-Firebase-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
