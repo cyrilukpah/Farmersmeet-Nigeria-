@@ -14,56 +14,44 @@ jobs:
     name: Build FarmersMeet Stage 7
     runs-on: ubuntu-latest
 
-    env:
-      PROJECT_DIR: FarmersMeet
-      APK_NAME: FarmersMeet-Stage7.apk
-
     steps:
-
-      # ------------------------------------------------------------
-      # 1. CHECKOUT
-      # ------------------------------------------------------------
-      - name: Checkout repository
+      - name: Checkout source
         uses: actions/checkout@v4
 
-      # ------------------------------------------------------------
-      # 2. JAVA 17
-      # ------------------------------------------------------------
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
 
-      # ------------------------------------------------------------
-      # 3. ANDROID SDK
-      # ------------------------------------------------------------
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      # ------------------------------------------------------------
-      # 4. GRADLE
-      # ------------------------------------------------------------
-      - name: Set up Gradle 8.10
-        uses: gradle/actions/setup-gradle@v6
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10'
 
-      # ------------------------------------------------------------
-      # 5. CREATE COMPLETE STAGE 7 PROJECT
-      # ------------------------------------------------------------
-      - name: Create FarmersMeet Stage 7 project
+      - name: Check Android SDK
+        shell: bash
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+
+          test -d "$ANDROID_HOME"
+          test -d "$ANDROID_HOME/platforms/android-35"
+
+          echo "Android SDK 35 is available."
+
+      - name: Create clean FarmersMeet project
         shell: bash
         run: |
           set -e
 
-          rm -rf "$PROJECT_DIR"
+          rm -rf FarmersMeet
 
-          mkdir -p "$PROJECT_DIR/app/src/main/java/ng/farmersmeet/nigeria"
-          mkdir -p "$PROJECT_DIR/app/src/main/res/values"
+          mkdir -p FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria
+          mkdir -p FarmersMeet/app/src/main/res/values
 
-          # settings.gradle
-          cat > "$PROJECT_DIR/settings.gradle" <<'EOF'
+          cat > FarmersMeet/settings.gradle <<'EOF'
           pluginManagement {
               repositories {
                   google()
@@ -74,6 +62,7 @@ jobs:
 
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+
               repositories {
                   google()
                   mavenCentral()
@@ -84,25 +73,20 @@ jobs:
           include(":app")
           EOF
 
-          # Root build.gradle
-          cat > "$PROJECT_DIR/build.gradle" <<'EOF'
+          cat > FarmersMeet/build.gradle <<'EOF'
           plugins {
               id 'com.android.application' version '8.7.3' apply false
               id 'org.jetbrains.kotlin.android' version '2.0.21' apply false
           }
           EOF
 
-          # gradle.properties
-          cat > "$PROJECT_DIR/gradle.properties" <<'EOF'
+          cat > FarmersMeet/gradle.properties <<'EOF'
           android.useAndroidX=true
           android.nonTransitiveRClass=true
-          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          org.gradle.jvmargs=-Xmx2g -Dfile.encoding=UTF-8
           EOF
 
-          # --------------------------------------------------------
-          # APP BUILD FILE
-          # --------------------------------------------------------
-          cat > "$PROJECT_DIR/app/build.gradle" <<'EOF'
+          cat > FarmersMeet/app/build.gradle <<'EOF'
           plugins {
               id 'com.android.application'
               id 'org.jetbrains.kotlin.android'
@@ -120,24 +104,6 @@ jobs:
                   versionName "8.0"
               }
 
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-
-              kotlinOptions {
-                  jvmTarget = "17"
-              }
-
-              signingConfigs {
-                  release {
-                      storeFile file("${rootProject.projectDir}/release.keystore")
-                      storePassword System.getenv("KEYSTORE_PASSWORD")
-                      keyAlias System.getenv("KEY_ALIAS")
-                      keyPassword System.getenv("KEY_PASSWORD")
-                  }
-              }
-
               buildTypes {
                   debug {
                       debuggable true
@@ -146,9 +112,16 @@ jobs:
                   release {
                       minifyEnabled false
                       shrinkResources false
-                      debuggable false
-                      signingConfig signingConfigs.release
                   }
+              }
+
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+
+              kotlinOptions {
+                  jvmTarget = "17"
               }
           }
 
@@ -159,10 +132,7 @@ jobs:
           }
           EOF
 
-          # --------------------------------------------------------
-          # ANDROID MANIFEST
-          # --------------------------------------------------------
-          cat > "$PROJECT_DIR/app/src/main/AndroidManifest.xml" <<'EOF'
+          cat > FarmersMeet/app/src/main/AndroidManifest.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
@@ -170,7 +140,8 @@ jobs:
                   android:theme="@style/AppTheme"
                   android:label="FarmersMeet"
                   android:allowBackup="true"
-                  android:supportsRtl="true">
+                  android:supportsRtl="true"
+                  android:usesCleartextTraffic="false">
 
                   <activity
                       android:name=".MainActivity"
@@ -189,15 +160,11 @@ jobs:
           </manifest>
           EOF
 
-          # --------------------------------------------------------
-          # THEME
-          # --------------------------------------------------------
-          cat > "$PROJECT_DIR/app/src/main/res/values/themes.xml" <<'EOF'
+          cat > FarmersMeet/app/src/main/res/values/themes.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
 
-              <style
-                  name="AppTheme"
+              <style name="AppTheme"
                   parent="Theme.AppCompat.Light.NoActionBar">
 
                   <item name="android:fontFamily">sans</item>
@@ -205,16 +172,14 @@ jobs:
                   <item name="android:statusBarColor">#0D4D25</item>
                   <item name="android:navigationBarColor">#0D4D25</item>
                   <item name="android:windowLightStatusBar">false</item>
+                  <item name="android:windowActionModeOverlay">true</item>
 
               </style>
 
           </resources>
           EOF
 
-          # --------------------------------------------------------
-          # MAIN ACTIVITY — STAGE 7
-          # --------------------------------------------------------
-          cat > "$PROJECT_DIR/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt" <<'EOF'
+          cat > FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt <<'EOF'
           package ng.farmersmeet.nigeria
 
           import android.content.Context
@@ -1123,7 +1088,6 @@ jobs:
                       )
 
                   choosePhoto.setOnClickListener {
-
                       photoPicker.launch(
                           arrayOf("image/*")
                       )
@@ -1194,8 +1158,7 @@ jobs:
                               System.currentTimeMillis(),
                               name.text.toString().trim(),
                               category.selectedItem.toString(),
-                              "₦" +
-                                  price.text.toString().trim(),
+                              "₦" + price.text.toString().trim(),
                               quantity.text.toString().trim(),
                               location.text.toString().trim(),
                               seller.text.toString().trim(),
@@ -1353,9 +1316,7 @@ jobs:
                   return result
               }
 
-              private fun isFavorite(
-                  id: Long
-              ): Boolean {
+              private fun isFavorite(id: Long): Boolean {
 
                   val prefs =
                       getSharedPreferences(
@@ -1374,9 +1335,7 @@ jobs:
                   )
               }
 
-              private fun toggleFavorite(
-                  id: Long
-              ) {
+              private fun toggleFavorite(id: Long) {
 
                   val prefs =
                       getSharedPreferences(
@@ -1407,9 +1366,7 @@ jobs:
                       .apply()
               }
 
-              private fun deleteListing(
-                  id: Long
-              ) {
+              private fun deleteListing(id: Long) {
 
                   val prefs =
                       getSharedPreferences(
@@ -1624,33 +1581,7 @@ jobs:
           }
           EOF
 
-      # ------------------------------------------------------------
-      # 6. GENERATE A CI SIGNING KEY
-      #
-      # This key is generated on every build. It makes the APK a
-      # properly signed standalone APK that Android can install.
-      # ------------------------------------------------------------
-      - name: Generate APK signing key
-        shell: bash
-        working-directory: FarmersMeet
-        run: |
-          set -e
-
-          keytool -genkeypair \
-            -v \
-            -keystore release.keystore \
-            -alias farmersmeet \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass farmersmeet123 \
-            -keypass farmersmeet123 \
-            -dname "CN=FarmersMeet, OU=FarmersMeet, O=FarmersMeet, L=Nigeria, ST=Abia, C=NG"
-
-      # ------------------------------------------------------------
-      # 7. VERIFY PROJECT STRUCTURE
-      # ------------------------------------------------------------
-      - name: Verify Stage 7 project
+      - name: Verify Stage 7 source files
         shell: bash
         run: |
           set -e
@@ -1662,132 +1593,49 @@ jobs:
           test -f FarmersMeet/app/src/main/AndroidManifest.xml
           test -f FarmersMeet/app/src/main/res/values/themes.xml
           test -f FarmersMeet/app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt
-          test -f FarmersMeet/release.keystore
 
-          echo "Stage 7 project structure verified."
+          echo "All FarmersMeet Stage 7 files verified."
 
-      # ------------------------------------------------------------
-      # 8. BUILD SIGNED RELEASE APK
-      # ------------------------------------------------------------
-      - name: Build signed Stage 7 APK
+      - name: Build debug APK
         working-directory: FarmersMeet
-        env:
-          KEYSTORE_PASSWORD: farmersmeet123
-          KEY_ALIAS: farmersmeet
-          KEY_PASSWORD: farmersmeet123
-        run: |
-          set -e
-
-          gradle clean :app:assembleRelease --no-daemon --stacktrace
-
-      # ------------------------------------------------------------
-      # 9. VERIFY APK EXISTS
-      # ------------------------------------------------------------
-      - name: Verify release APK
         shell: bash
         run: |
           set -e
 
-          APK="FarmersMeet/app/build/outputs/apk/release/app-release.apk"
+          gradle --version
+          gradle clean
+          gradle :app:assembleDebug --stacktrace
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -e
+
+          APK="FarmersMeet/app/build/outputs/apk/debug/app-debug.apk"
 
           test -f "$APK"
-          test -s "$APK"
 
-          echo "Release APK exists:"
+          echo "APK successfully created:"
           ls -lh "$APK"
 
-      # ------------------------------------------------------------
-      # 10. VERIFY APK SIGNATURE
-      # ------------------------------------------------------------
-      - name: Verify APK signature
+          echo "APK location:"
+          realpath "$APK"
+
+      - name: Rename APK
         shell: bash
         run: |
           set -e
-
-          APK="FarmersMeet/app/build/outputs/apk/release/app-release.apk"
-
-          APKSIGNER=$(find "$ANDROID_HOME/build-tools" \
-            -type f \
-            -name apksigner \
-            | sort -V \
-            | tail -n 1)
-
-          if [ -z "$APKSIGNER" ]; then
-            echo "ERROR: apksigner was not found."
-            exit 1
-          fi
-
-          echo "Using:"
-          echo "$APKSIGNER"
-
-          "$APKSIGNER" verify --verbose "$APK"
-
-          echo "APK signature verification PASSED."
-
-      # ------------------------------------------------------------
-      # 11. VERIFY APK CERTIFICATE
-      # ------------------------------------------------------------
-      - name: Display APK certificate
-        shell: bash
-        run: |
-          set -e
-
-          APK="FarmersMeet/app/build/outputs/apk/release/app-release.apk"
-
-          APKSIGNER=$(find "$ANDROID_HOME/build-tools" \
-            -type f \
-            -name apksigner \
-            | sort -V \
-            | tail -n 1)
-
-          "$APKSIGNER" verify --print-certs "$APK"
-
-      # ------------------------------------------------------------
-      # 12. RENAME FINAL APK
-      # ------------------------------------------------------------
-      - name: Prepare final APK
-        shell: bash
-        run: |
-          set -e
-
-          mkdir -p output
 
           cp \
-            FarmersMeet/app/build/outputs/apk/release/app-release.apk \
-            "output/$APK_NAME"
+            FarmersMeet/app/build/outputs/apk/debug/app-debug.apk \
+            FarmersMeet-Stage7.apk
 
-          test -f "output/$APK_NAME"
-          test -s "output/$APK_NAME"
+          ls -lh FarmersMeet-Stage7.apk
 
-          echo "FINAL APK:"
-          ls -lh "output/$APK_NAME"
-
-      # ------------------------------------------------------------
-      # 13. UPLOAD INSTALLABLE APK
-      # ------------------------------------------------------------
       - name: Upload FarmersMeet Stage 7 APK
         uses: actions/upload-artifact@v4
         with:
           name: FarmersMeet-Stage7-APK
-          path: output/FarmersMeet-Stage7.apk
+          path: FarmersMeet-Stage7.apk
           if-no-files-found: error
           retention-days: 30
-
-      # ------------------------------------------------------------
-      # 14. BUILD SUMMARY
-      # ------------------------------------------------------------
-      - name: Build summary
-        shell: bash
-        run: |
-          echo "=============================================="
-          echo " FarmersMeet Stage 7 BUILD SUCCESSFUL"
-          echo "=============================================="
-          echo "APK: output/FarmersMeet-Stage7.apk"
-          echo "Application ID: ng.farmersmeet.nigeria"
-          echo "Version: 8.0"
-          echo "Version Code: 8"
-          echo "Signed: YES"
-          echo "Signature verified: YES"
-          echo "Launcher activity: YES"
-          echo "Artifact: FarmersMeet-Stage7-APK"
-          echo "=============================================="
