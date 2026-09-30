@@ -30,63 +30,70 @@ jobs:
         with:
           gradle-version: "8.10"
 
-      - name: Verify Stage 9 FarmersMeet project
+      - name: Prepare FarmersMeet Stage 9 project
         shell: bash
         run: |
           set -euo pipefail
 
           echo "=========================================="
           echo " FARMERSMEET STAGE 10"
-          echo " USING STAGE 9 PROJECT STRUCTURE"
+          echo " PRESERVING STAGE 9 PROJECT"
           echo "=========================================="
-          echo
 
-          echo "Repository root:"
+          echo
+          echo "Repository:"
           pwd
 
           echo
-          echo "Repository contents:"
-          find . -maxdepth 3 -type f | sort | head -300
+          echo "Checking Stage 9 project files..."
+
+          test -f "settings.gradle"
+          test -f "app/build.gradle"
+          test -d "app/src/main"
+
+          echo "settings.gradle found."
+          echo "app/build.gradle found."
+          echo "app/src/main found."
 
           echo
-          echo "Checking Gradle project..."
+          echo "Restoring root Gradle plugin configuration..."
 
-          if [ ! -f "settings.gradle" ] && [ ! -f "settings.gradle.kts" ]; then
-            echo "ERROR: settings.gradle or settings.gradle.kts was not found."
-            exit 1
-          fi
-
-          if [ -f "settings.gradle" ]; then
-            echo "Found settings.gradle"
+          if [ -f "Settings/build.gradle" ]; then
+            cp "Settings/build.gradle" "build.gradle"
+            echo "Root build.gradle restored from Settings/build.gradle."
           else
-            echo "Found settings.gradle.kts"
-          fi
-
-          if [ -f "build.gradle" ]; then
-            echo "Found root build.gradle"
-          elif [ -f "build.gradle.kts" ]; then
-            echo "Found root build.gradle.kts"
-          else
-            echo "ERROR: Root Gradle build file is missing."
-            exit 1
-          fi
-
-          if [ -f "app/build.gradle" ]; then
-            echo "Found app/build.gradle"
-          elif [ -f "app/build.gradle.kts" ]; then
-            echo "Found app/build.gradle.kts"
-          else
-            echo "ERROR: app Gradle build file is missing."
-            exit 1
-          fi
-
-          if [ ! -d "app/src/main" ]; then
-            echo "ERROR: app/src/main is missing."
+            echo "ERROR: Settings/build.gradle is missing."
             exit 1
           fi
 
           echo
-          echo "PROJECT VERIFICATION PASSED."
+          echo "Checking Firebase configuration..."
+
+          if [ -s "app/google-services.json" ]; then
+            echo "app/google-services.json already exists."
+          elif [ -s "Settings/google-services.json" ]; then
+            cp "Settings/google-services.json" "app/google-services.json"
+            echo "Firebase configuration restored from Settings/."
+          elif [ -s "google-services.json" ]; then
+            cp "google-services.json" "app/google-services.json"
+            echo "Firebase configuration found at repository root."
+          else
+            echo "WARNING: google-services.json was not found."
+            echo "Continuing with the existing project."
+          fi
+
+          echo
+          echo "=========================================="
+          echo " PROJECT VERIFICATION"
+          echo "=========================================="
+
+          test -f "settings.gradle"
+          test -f "build.gradle"
+          test -f "app/build.gradle"
+          test -d "app/src/main"
+
+          echo
+          echo "Stage 9 project structure is ready."
 
       - name: Enable AndroidX
         shell: bash
@@ -98,12 +105,18 @@ jobs:
           touch "$PROPERTIES_FILE"
 
           if grep -q '^android.useAndroidX=' "$PROPERTIES_FILE"; then
-            sed -i 's/^android.useAndroidX=.*/android.useAndroidX=true/' "$PROPERTIES_FILE"
+            sed -i \
+              's/^android.useAndroidX=.*/android.useAndroidX=true/' \
+              "$PROPERTIES_FILE"
           else
             printf '\nandroid.useAndroidX=true\n' >> "$PROPERTIES_FILE"
           fi
 
-          if ! grep -q '^android.nonTransitiveRClass=' "$PROPERTIES_FILE"; then
+          if grep -q '^android.nonTransitiveRClass=' "$PROPERTIES_FILE"; then
+            sed -i \
+              's/^android.nonTransitiveRClass=.*/android.nonTransitiveRClass=true/' \
+              "$PROPERTIES_FILE"
+          else
             printf 'android.nonTransitiveRClass=true\n' >> "$PROPERTIES_FILE"
           fi
 
@@ -111,66 +124,44 @@ jobs:
           echo "Gradle properties:"
           cat "$PROPERTIES_FILE"
 
-      - name: Verify Firebase configuration
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [ -s "app/google-services.json" ]; then
-            echo "Firebase configuration found in app/."
-            exit 0
-          fi
-
-          if [ -s "Settings/google-services.json" ]; then
-            cp "Settings/google-services.json" "app/google-services.json"
-            echo "Firebase configuration copied from Settings/."
-            exit 0
-          fi
-
-          if [ -s "google-services.json" ]; then
-            cp "google-services.json" "app/google-services.json"
-            echo "Firebase configuration copied from repository root."
-            exit 0
-          fi
-
-          echo "WARNING: google-services.json was not found."
-          echo "Continuing with the existing Stage 9 project configuration."
-
       - name: Prepare Gradle wrapper
         shell: bash
         run: |
           set -euo pipefail
 
           if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
+            chmod +x "./gradlew"
             echo "Existing Gradle wrapper found."
           else
             echo "No Gradle wrapper found."
-            echo "Creating Gradle 8.10 wrapper."
+            echo "Creating Gradle 8.10 wrapper..."
 
             gradle wrapper \
               --gradle-version 8.10 \
               --distribution-type bin
 
-            chmod +x ./gradlew
+            chmod +x "./gradlew"
           fi
 
           test -x "./gradlew"
 
+          echo
           echo "Gradle wrapper ready."
 
-      - name: Show available Gradle tasks
+      - name: Verify Gradle project
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "Checking available Gradle tasks..."
+          echo "Checking FarmersMeet Gradle project..."
 
           ./gradlew \
             --no-daemon \
             --stacktrace \
-            :app:tasks \
-            --all
+            :app:tasks
+
+          echo
+          echo "Gradle project verification PASSED."
 
       - name: Build FarmersMeet Stage 10 APK
         shell: bash
@@ -180,12 +171,14 @@ jobs:
           echo "=========================================="
           echo " BUILDING FARMERSMEET STAGE 10 APK"
           echo "=========================================="
-          echo
 
           ./gradlew \
             --no-daemon \
             --stacktrace \
             :app:assembleDebug
+
+          echo
+          echo "Gradle APK build completed."
 
       - name: Locate generated APK
         shell: bash
@@ -194,26 +187,31 @@ jobs:
 
           echo "Searching for generated APK..."
 
-          APK="$(find app/build -type f -name "*.apk" 2>/dev/null | head -n 1 || true)"
+          APK="$(find "app/build/outputs/apk" \
+            -type f \
+            -name "*.apk" \
+            -print \
+            | sort \
+            | head -n 1)"
 
           if [ -z "$APK" ]; then
             echo
             echo "ERROR: No APK was generated."
 
             echo
-            echo "Contents of app/build:"
-            if [ -d "app/build" ]; then
-              find app/build -maxdepth 6 -type f | sort
-            else
-              echo "app/build does not exist."
-            fi
+            echo "APK output directory:"
+            find "app/build" \
+              -maxdepth 8 \
+              -type f \
+              -name "*.apk" \
+              -print 2>/dev/null || true
 
             exit 1
           fi
 
           echo
           echo "=========================================="
-          echo " FARMERSMEET STAGE 10 APK BUILT"
+          echo " FARMERSMEET STAGE 10 APK READY"
           echo "=========================================="
           echo
           echo "APK:"
