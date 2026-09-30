@@ -1,226 +1,28 @@
-name: FarmersMeet Stage 10 APK
-
-on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
-
-permissions:
-  contents: read
-
-jobs:
-  build:
-    name: Build FarmersMeet Stage 10
-    runs-on: ubuntu-22.04
-
-    steps:
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: Set up Gradle 8.10
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "8.10"
-
-      - name: Verify Stage 9 project structure
+      - name: Locate FarmersMeet Android project
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "Verifying FarmersMeet Android project..."
-
-          test -f settings.gradle
-          test -f build.gradle
-          test -f app/build.gradle
-          test -f app/src/main/AndroidManifest.xml
-          test -f app/src/main/java/ng/farmersmeet/nigeria/MainActivity.kt
-
-          echo "Project structure verified."
-
-      - name: Enable AndroidX
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          cat > gradle.properties <<'EOF'
-          android.useAndroidX=true
-          android.nonTransitiveRClass=true
-          org.gradle.jvmargs=-Xmx2048m
-          EOF
-
-          echo "AndroidX configuration:"
-          cat gradle.properties
-
-      - name: Install Firebase configuration
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          mkdir -p app
-
-          if [ -f "Settings/google-services.json" ]; then
-            cp "Settings/google-services.json" "app/google-services.json"
-            echo "Firebase configuration copied from Settings/google-services.json."
-
-          elif [ -f "app/google-services.json" ]; then
-            echo "Firebase configuration already exists in app/."
-
-          else
-            echo "ERROR: google-services.json was not found."
-            echo "Expected:"
-            echo "  Settings/google-services.json"
-            echo "or:"
-            echo "  app/google-services.json"
-            exit 1
-          fi
-
-          test -s app/google-services.json
-
-          echo "Firebase configuration verified."
-
-      - name: Verify Firebase package
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          path = Path("app/google-services.json")
-          data = json.loads(path.read_text())
-
-          expected = "ng.farmersmeet.nigeria"
-
-          clients = data.get("client", [])
-
-          if not clients:
-              raise SystemExit(
-                  "ERROR: google-services.json contains no Android client."
-              )
-
-          packages = []
-
-          for client in clients:
-              package_name = (
-                  client
-                  .get("client_info", {})
-                  .get("android_client_info", {})
-                  .get("package_name")
-              )
-
-              if package_name:
-                  packages.append(package_name)
-
-          print("Firebase Android package(s):")
-
-          for package_name in packages:
-              print(" - " + package_name)
-
-          if expected not in packages:
-              raise SystemExit(
-                  "ERROR: Firebase package mismatch.\n"
-                  "Expected: " + expected + "\n"
-                  "Found: " + str(packages)
-              )
-
-          print("Firebase package verification PASSED.")
-          PY
-
-      - name: Verify Android Gradle configuration
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          echo "Checking Gradle files..."
-
-          grep -q "com.android.application" build.gradle
-          grep -q "8.7.3" build.gradle
-          grep -q "org.jetbrains.kotlin.android" build.gradle
-          grep -q "2.0.21" build.gradle
-          grep -q "com.google.gms.google-services" build.gradle
-
-          grep -q "ng.farmersmeet.nigeria" app/build.gradle
-          grep -q "compileSdk 35" app/build.gradle
-          grep -q "targetSdk 35" app/build.gradle
-          grep -q "versionCode 10" app/build.gradle
-          grep -q 'versionName "10.0"' app/build.gradle
-
-          echo "Gradle configuration verification PASSED."
-
-      - name: Verify Gradle wrapper
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [ ! -f "gradlew" ]; then
-            echo "Gradle wrapper not present."
-            echo "Creating Gradle 8.10 wrapper..."
-
-            gradle wrapper \
-              --gradle-version 8.10 \
-              --distribution-type bin
-          fi
-
-          chmod +x gradlew
-
-          test -f gradlew
-
-          echo "Gradle wrapper ready."
-
-      - name: Verify Gradle project
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          ./gradlew \
-            --no-daemon \
-            --stacktrace \
-            :app:tasks
-
-      - name: Build FarmersMeet Stage 10 APK
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          ./gradlew \
-            --no-daemon \
-            --stacktrace \
-            clean \
-            :app:assembleDebug
-
-      - name: Verify Stage 10 APK
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          APK="app/build/outputs/apk/debug/app-debug.apk"
-
-          if [ ! -s "$APK" ]; then
-            echo "ERROR: Stage 10 APK was not generated."
-            exit 1
-          fi
+          echo "Repository root:"
+          pwd
 
           echo
-          echo "=========================================="
-          echo " FARMERSMEET STAGE 10 APK SUCCESSFULLY BUILT"
-          echo "=========================================="
+          echo "Top-level files:"
+          find . -maxdepth 2 -type f \
+            \( -name "settings.gradle" \
+            -o -name "settings.gradle.kts" \
+            -o -name "build.gradle" \
+            -o -name "build.gradle.kts" \
+            -o -name "AndroidManifest.xml" \
+            -o -name "MainActivity.kt" \) \
+            -print | sort
+
           echo
+          echo "Directories containing Gradle settings:"
+          find . -type f \
+            \( -name "settings.gradle" -o -name "settings.gradle.kts" \) \
+            -print | sort
 
-          ls -lh "$APK"
-
-      - name: Upload Stage 10 APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: FarmersMeet-Stage10-Full-Marketplace-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 30
+          echo
+          echo "Repository structure:"
+          find . -maxdepth 3 -type d -print | sort
