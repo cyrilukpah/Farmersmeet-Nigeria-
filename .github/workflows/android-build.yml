@@ -1,4 +1,4 @@
-name: FarmersMeet Stage 9 APK
+name: FarmersMeet Stage 9 Publish
 
 on:
   workflow_dispatch:
@@ -30,138 +30,127 @@ jobs:
         with:
           gradle-version: "8.10"
 
-      - name: Prepare Stage 9 project from Settings
+      - name: Prepare Stage 9 project
         shell: bash
         run: |
           set -euo pipefail
 
           echo "=========================================="
           echo " FARMERSMEET STAGE 9"
-          echo " USING SETTINGS PROJECT"
+          echo " USING THE EXISTING SETTINGS PROJECT"
           echo "=========================================="
 
-          echo
-          echo "Checking Settings project..."
+          if [ ! -d "Settings" ]; then
+            echo "ERROR: Settings/ directory was not found."
+            exit 1
+          fi
 
-          test -d "Settings"
-          test -f "Settings/Settings.gradle"
-          test -f "Settings/build.gradle"
-          test -f "Settings/app/build.gradle"
+          if [ ! -f "Settings/Settings.gradle" ]; then
+            echo "ERROR: Settings/Settings.gradle was not found."
+            exit 1
+          fi
 
-          echo "Settings directory found."
-          echo "Settings/build.gradle found."
-          echo "Settings/app/build.gradle found."
+          if [ ! -f "Settings/build.gradle" ]; then
+            echo "ERROR: Settings/build.gradle was not found."
+            exit 1
+          fi
 
-          echo
-          echo "Preparing Gradle settings file..."
+          if [ ! -f "Settings/app/build.gradle" ]; then
+            echo "ERROR: Settings/app/build.gradle was not found."
+            exit 1
+          fi
 
-          cp "Settings/Settings.gradle" \
-             "Settings/settings.gradle"
-
-          echo "Settings/settings.gradle created."
-
-          echo
-          echo "Preparing application source..."
-
-          if [ -d "Settings/app/src/main" ]; then
-            echo "Settings/app/src/main already exists."
-          elif [ -d "app/src/main" ]; then
-            mkdir -p "Settings/app/src/main"
-            cp -R "app/src/main/." "Settings/app/src/main/"
-            echo "Application source copied into Settings/app/src/main."
-          else
-            echo "ERROR: No Android application source was found."
+          if [ ! -d "Settings/app/src/main" ]; then
+            echo "ERROR: Settings/app/src/main was not found."
             exit 1
           fi
 
           echo
-          echo "Preparing Firebase configuration..."
-
-          if [ -s "Settings/app/google-services.json" ]; then
-            echo "Firebase configuration already exists."
-          elif [ -s "Settings/google-services.json" ]; then
-            cp "Settings/google-services.json" \
-               "Settings/app/google-services.json"
-
-            echo "Firebase configuration copied from Settings/."
-          elif [ -s "app/google-services.json" ]; then
-            cp "app/google-services.json" \
-               "Settings/app/google-services.json"
-
-            echo "Firebase configuration copied from app/."
-          else
-            echo "WARNING: google-services.json was not found."
-            echo "Continuing without copying Firebase configuration."
-          fi
+          echo "Stage 9 project files found."
 
           echo
-          echo "=========================================="
-          echo " STAGE 9 PROJECT READY"
-          echo "=========================================="
-
-          echo
-          echo "Settings project files:"
-
-          find "Settings" \
+          echo "Settings project:"
+          find Settings \
             -maxdepth 3 \
             -type f \
-            \( -name "*.gradle" \
-            -o -name "*.gradle.kts" \
-            -o -name "AndroidManifest.xml" \
-            -o -name "google-services.json" \) \
+            \( \
+              -name "*.gradle" \
+              -o -name "*.gradle.kts" \
+              -o -name "AndroidManifest.xml" \
+              -o -name "google-services.json" \
+            \) \
             -print | sort
 
-      - name: Enable AndroidX
+          echo
+          echo "Creating temporary Stage 9 Gradle workspace..."
+
+          rm -rf "$GITHUB_WORKSPACE/stage9-build"
+
+          mkdir -p "$GITHUB_WORKSPACE/stage9-build"
+
+          cp -a Settings/. \
+            "$GITHUB_WORKSPACE/stage9-build/"
+
+          cd "$GITHUB_WORKSPACE/stage9-build"
+
+          cp Settings.gradle settings.gradle
+
+          echo
+          echo "Temporary Gradle project prepared."
+
+          echo
+          echo "Project root:"
+          pwd
+
+          echo
+          echo "Root files:"
+          ls -la
+
+          echo
+          echo "App files:"
+          find app -maxdepth 3 -type f -print | sort | head -200
+
+      - name: Prepare Firebase configuration
         shell: bash
         run: |
           set -euo pipefail
 
-          cd "Settings"
+          cd "$GITHUB_WORKSPACE/stage9-build"
 
-          PROPERTIES_FILE="gradle.properties"
+          if [ -s "app/google-services.json" ]; then
+            echo "Firebase configuration already exists."
+          elif [ -s "$GITHUB_WORKSPACE/Settings/google-services.json" ]; then
+            cp "$GITHUB_WORKSPACE/Settings/google-services.json" \
+              app/google-services.json
 
-          touch "$PROPERTIES_FILE"
-
-          if grep -q '^android.useAndroidX=' "$PROPERTIES_FILE"; then
-            sed -i \
-              's/^android.useAndroidX=.*/android.useAndroidX=true/' \
-              "$PROPERTIES_FILE"
+            echo "Firebase configuration copied from Settings/."
           else
-            printf '\nandroid.useAndroidX=true\n' >> "$PROPERTIES_FILE"
+            echo "WARNING: google-services.json was not found."
+            echo "Continuing with the existing Stage 9 project."
           fi
-
-          if grep -q '^android.nonTransitiveRClass=' "$PROPERTIES_FILE"; then
-            sed -i \
-              's/^android.nonTransitiveRClass=.*/android.nonTransitiveRClass=true/' \
-              "$PROPERTIES_FILE"
-          else
-            printf 'android.nonTransitiveRClass=true\n' >> "$PROPERTIES_FILE"
-          fi
-
-          echo "AndroidX enabled."
 
       - name: Prepare Gradle wrapper
         shell: bash
         run: |
           set -euo pipefail
 
-          cd "Settings"
+          cd "$GITHUB_WORKSPACE/stage9-build"
 
-          if [ -f "./gradlew" ]; then
-            chmod +x "./gradlew"
+          if [ -f "gradlew" ]; then
+            chmod +x gradlew
             echo "Existing Gradle wrapper found."
           else
             echo "No Gradle wrapper found."
-            echo "Creating Gradle 8.10 wrapper..."
+            echo "Creating Gradle 8.10 wrapper."
 
             gradle wrapper \
               --gradle-version 8.10 \
               --distribution-type bin
 
-            chmod +x "./gradlew"
+            chmod +x gradlew
           fi
 
-          test -x "./gradlew"
+          test -x gradlew
 
           echo "Gradle wrapper ready."
 
@@ -170,10 +159,10 @@ jobs:
         run: |
           set -euo pipefail
 
-          cd "Settings"
+          cd "$GITHUB_WORKSPACE/stage9-build"
 
           echo "=========================================="
-          echo " VERIFYING STAGE 9"
+          echo " VERIFYING STAGE 9 GRADLE PROJECT"
           echo "=========================================="
 
           ./gradlew \
@@ -181,15 +170,12 @@ jobs:
             --stacktrace \
             :app:tasks
 
-          echo
-          echo "STAGE 9 GRADLE VERIFICATION PASSED."
-
       - name: Build Stage 9 APK
         shell: bash
         run: |
           set -euo pipefail
 
-          cd "Settings"
+          cd "$GITHUB_WORKSPACE/stage9-build"
 
           echo "=========================================="
           echo " BUILDING FARMERSMEET STAGE 9 APK"
@@ -200,61 +186,61 @@ jobs:
             --stacktrace \
             :app:assembleDebug
 
-          echo
-          echo "STAGE 9 APK BUILD COMPLETED."
-
       - name: Locate Stage 9 APK
         shell: bash
         run: |
           set -euo pipefail
 
+          cd "$GITHUB_WORKSPACE/stage9-build"
+
           echo "=========================================="
           echo " LOCATING STAGE 9 APK"
           echo "=========================================="
 
-          APK=""
-
-          if [ -f "Settings/app/build/outputs/apk/debug/app-debug.apk" ]; then
-            APK="Settings/app/build/outputs/apk/debug/app-debug.apk"
-          else
-            APK="$(find "Settings/app/build/outputs/apk" \
-              -type f \
-              -name "*.apk" \
-              -print \
-              | sort \
-              | head -n 1 || true)"
-          fi
+          APK="$(find app/build/outputs/apk \
+            -type f \
+            -name "*.apk" \
+            -print -quit 2>/dev/null || true)"
 
           if [ -z "$APK" ]; then
-            echo
-            echo "ERROR: Stage 9 APK was not generated."
+            echo "ERROR: No APK was generated."
 
             echo
-            echo "APK files found:"
-            find "Settings/app/build" \
+            echo "Files under app/build:"
+            find app/build \
               -type f \
-              -name "*.apk" \
               -print 2>/dev/null || true
 
             exit 1
           fi
 
           echo
-          echo "=========================================="
-          echo " FARMERSMEET STAGE 9 APK READY"
-          echo "=========================================="
-
-          echo
-          echo "APK: $APK"
+          echo "Stage 9 APK found:"
+          echo "$APK"
 
           ls -lh "$APK"
 
-          echo "APK_PATH=$APK" >> "$GITHUB_ENV"
+          cp "$APK" \
+            "$GITHUB_WORKSPACE/FarmersMeet-Stage-9.apk"
+
+          echo
+          echo "Final APK:"
+          ls -lh "$GITHUB_WORKSPACE/FarmersMeet-Stage-9.apk"
 
       - name: Upload Stage 9 APK
         uses: actions/upload-artifact@v4
         with:
           name: FarmersMeet-Stage-9-APK
-          path: ${{ env.APK_PATH }}
+          path: FarmersMeet-Stage-9.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Stage 9 build completed
+        shell: bash
+        run: |
+          echo "=========================================="
+          echo " FARMERSMEET STAGE 9 BUILD SUCCESSFUL"
+          echo "=========================================="
+          echo
+          echo "The Stage 9 APK has been uploaded as:"
+          echo "FarmersMeet-Stage-9-APK"
