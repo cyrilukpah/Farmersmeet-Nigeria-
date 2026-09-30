@@ -45,12 +45,6 @@ jobs:
           pwd
           echo
 
-          echo "Root contents:"
-          find . -maxdepth 2 -type f \
-            -not -path "*/.git/*" \
-            -print | sort
-
-          echo
           echo "Gradle files:"
           find . \
             -type f \
@@ -137,10 +131,6 @@ jobs:
                 PROJECT_ROOT="$(dirname "$(dirname "$MODULE")")"
 
                 if [ "$PROJECT_ROOT" = "." ]; then
-                  PROJECT_ROOT=""
-                fi
-
-                if [ -z "$PROJECT_ROOT" ]; then
                   PROJECT_ROOT="."
                 fi
 
@@ -165,8 +155,6 @@ jobs:
           if [ -z "$PROJECT_ROOT" ]; then
             echo
             echo "ERROR: Android Gradle project could not be identified."
-            echo
-            echo "The repository contents above are the diagnostic evidence."
             exit 1
           fi
 
@@ -196,55 +184,30 @@ jobs:
           echo "$PROJECT_ROOT"
           echo
 
-          SETTINGS_OK=false
-          BUILD_OK=false
-          APP_OK=false
-          MAIN_OK=false
-
           if [ -f "$PROJECT_ROOT/settings.gradle" ] || \
              [ -f "$PROJECT_ROOT/settings.gradle.kts" ]; then
-            SETTINGS_OK=true
-          fi
-
-          if [ -f "$PROJECT_ROOT/build.gradle" ] || \
-             [ -f "$PROJECT_ROOT/build.gradle.kts" ]; then
-            BUILD_OK=true
+            echo "Gradle settings: FOUND"
+          else
+            echo "ERROR: Gradle settings file missing."
+            exit 1
           fi
 
           if [ -f "$PROJECT_ROOT/app/build.gradle" ] || \
              [ -f "$PROJECT_ROOT/app/build.gradle.kts" ]; then
-            APP_OK=true
-          fi
-
-          if [ -d "$PROJECT_ROOT/app/src/main" ]; then
-            MAIN_OK=true
-          fi
-
-          echo "settings.gradle: $SETTINGS_OK"
-          echo "root build file:  $BUILD_OK"
-          echo "app build file:   $APP_OK"
-          echo "app/src/main:     $MAIN_OK"
-          echo
-
-          if [ "$APP_OK" != true ] || [ "$MAIN_OK" != true ]; then
-
-            echo "ERROR: Selected project does not contain a conventional app module."
-
-            echo
-            echo "Build files found:"
-            find "$PROJECT_ROOT" \
-              -type f \
-              \( \
-                -name "build.gradle" \
-                -o -name "build.gradle.kts" \
-              \) \
-              -not -path "*/.gradle/*" \
-              -not -path "*/build/*" \
-              -print | sort
-
+            echo "App Gradle file: FOUND"
+          else
+            echo "ERROR: app Gradle build file missing."
             exit 1
           fi
 
+          if [ -d "$PROJECT_ROOT/app/src/main" ]; then
+            echo "app/src/main: FOUND"
+          else
+            echo "ERROR: app/src/main missing."
+            exit 1
+          fi
+
+          echo
           echo "PROJECT VALIDATION PASSED."
 
       - name: Enable AndroidX
@@ -278,7 +241,44 @@ jobs:
               >> "$PROPERTIES"
           fi
 
-          echo "AndroidX enabled."
+          echo
+          echo "AndroidX configuration:"
+          cat "$PROPERTIES"
+
+      - name: Prepare Firebase configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PROJECT_ROOT="$(cat "$GITHUB_WORKSPACE/.farmersmeet_project_root")"
+
+          TARGET="$PROJECT_ROOT/app/google-services.json"
+
+          if [ -s "$TARGET" ]; then
+            echo "Firebase configuration already exists."
+            exit 0
+          fi
+
+          if [ -s "$GITHUB_WORKSPACE/Settings/google-services.json" ]; then
+            cp \
+              "$GITHUB_WORKSPACE/Settings/google-services.json" \
+              "$TARGET"
+
+            echo "Firebase configuration copied from Settings/."
+            exit 0
+          fi
+
+          if [ -s "$GITHUB_WORKSPACE/google-services.json" ]; then
+            cp \
+              "$GITHUB_WORKSPACE/google-services.json" \
+              "$TARGET"
+
+            echo "Firebase configuration copied from repository root."
+            exit 0
+          fi
+
+          echo "No additional Firebase configuration found."
+          echo "Continuing."
 
       - name: Prepare Gradle wrapper
         shell: bash
@@ -290,12 +290,9 @@ jobs:
           cd "$PROJECT_ROOT"
 
           if [ -f "./gradlew" ]; then
-
             chmod +x ./gradlew
             echo "Existing Gradle wrapper found."
-
           else
-
             echo "No Gradle wrapper found."
             echo "Creating Gradle 8.10 wrapper."
 
@@ -304,7 +301,6 @@ jobs:
               --distribution-type bin
 
             chmod +x ./gradlew
-
           fi
 
           test -x ./gradlew
@@ -351,7 +347,6 @@ jobs:
           ./gradlew \
             --no-daemon \
             --stacktrace \
-            clean \
             :app:assembleDebug
 
       - name: Locate APK
