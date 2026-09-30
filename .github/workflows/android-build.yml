@@ -30,284 +30,147 @@ jobs:
         with:
           gradle-version: "8.10"
 
-      - name: Inspect repository
+      - name: Locate Android project
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "=========================================="
-          echo " FARMERSMEET STAGE 10"
-          echo " REPOSITORY INSPECTION"
-          echo "=========================================="
-          echo
-
-          echo "Repository:"
-          pwd
-          echo
-
-          echo "Gradle files:"
-          find . \
-            -type f \
-            \( \
-              -name "settings.gradle" \
-              -o -name "settings.gradle.kts" \
-              -o -name "build.gradle" \
-              -o -name "build.gradle.kts" \
-              -o -name "gradlew" \
-            \) \
-            -not -path "*/.git/*" \
-            -not -path "*/.gradle/*" \
-            -print | sort
-
-          echo
-          echo "Android manifests:"
-          find . \
-            -type f \
-            -name "AndroidManifest.xml" \
-            -not -path "*/.git/*" \
-            -not -path "*/build/*" \
-            -print | sort
-
-          echo
-          echo "Android source directories:"
-          find . \
-            -type d \
-            -path "*/src/main" \
-            -not -path "*/.git/*" \
-            -not -path "*/build/*" \
-            -print | sort
-
-      - name: Determine Gradle project
-        shell: bash
-        run: |
-          set -euo pipefail
+          echo "Searching for FarmersMeet Android project..."
 
           PROJECT_ROOT=""
 
-          echo "Searching for Android Gradle project..."
-
           while IFS= read -r SETTINGS_FILE; do
+            CANDIDATE="$(dirname "$SETTINGS_FILE")"
 
-            ROOT="$(dirname "$SETTINGS_FILE")"
-
-            echo
-            echo "Checking:"
-            echo "$SETTINGS_FILE"
-
-            if [ -f "$ROOT/app/build.gradle" ] || \
-               [ -f "$ROOT/app/build.gradle.kts" ]; then
-
-              if [ -d "$ROOT/app/src/main" ]; then
-                PROJECT_ROOT="$ROOT"
-                break
-              fi
-
+            if [ -f "$CANDIDATE/app/build.gradle" ] || \
+               [ -f "$CANDIDATE/app/build.gradle.kts" ]; then
+              PROJECT_ROOT="$CANDIDATE"
+              break
             fi
-
           done < <(
             find . \
               -type f \
-              \( \
-                -name "settings.gradle" \
-                -o -name "settings.gradle.kts" \
-              \) \
-              -not -path "*/.git/*" \
+              \( -name "settings.gradle" -o -name "settings.gradle.kts" \) \
               -not -path "*/.gradle/*" \
               -print | sort
           )
 
           if [ -z "$PROJECT_ROOT" ]; then
+            echo "ERROR: Android project could not be located."
 
             echo
-            echo "No conventional app/ Gradle project found."
+            echo "settings.gradle files found:"
+            find . \
+              -type f \
+              \( -name "settings.gradle" -o -name "settings.gradle.kts" \) \
+              -not -path "*/.gradle/*" \
+              -print | sort
+
             echo
-            echo "Searching for Android application modules..."
+            echo "Gradle build files found:"
+            find . \
+              -type f \
+              \( -name "build.gradle" -o -name "build.gradle.kts" \) \
+              -not -path "*/.gradle/*" \
+              -print | sort
 
-            while IFS= read -r APP_GRADLE; do
-
-              MODULE="$(dirname "$APP_GRADLE")"
-
-              if [ -d "$MODULE/src/main" ]; then
-                PROJECT_ROOT="$(dirname "$(dirname "$MODULE")")"
-
-                if [ "$PROJECT_ROOT" = "." ]; then
-                  PROJECT_ROOT="."
-                fi
-
-                break
-              fi
-
-            done < <(
-              find . \
-                -type f \
-                \( \
-                  -path "*/build.gradle" \
-                  -o -path "*/build.gradle.kts" \
-                \) \
-                -not -path "*/.git/*" \
-                -not -path "*/.gradle/*" \
-                -not -path "*/build/*" \
-                -print | sort
-            )
-
-          fi
-
-          if [ -z "$PROJECT_ROOT" ]; then
-            echo
-            echo "ERROR: Android Gradle project could not be identified."
             exit 1
           fi
 
           PROJECT_ROOT="${PROJECT_ROOT#./}"
 
-          if [ -z "$PROJECT_ROOT" ]; then
-            PROJECT_ROOT="."
-          fi
-
-          echo
-          echo "=========================================="
-          echo " SELECTED PROJECT"
-          echo "=========================================="
+          echo "Android project:"
           echo "$PROJECT_ROOT"
 
-          printf '%s\n' "$PROJECT_ROOT" \
-            > "$GITHUB_WORKSPACE/.farmersmeet_project_root"
+          echo "$PROJECT_ROOT" > "$GITHUB_WORKSPACE/.farmersmeet_project_root"
 
-      - name: Validate selected project
+      - name: Verify Android project
         shell: bash
         run: |
           set -euo pipefail
 
           PROJECT_ROOT="$(cat "$GITHUB_WORKSPACE/.farmersmeet_project_root")"
 
-          echo "Selected project:"
+          echo "Using Android project:"
           echo "$PROJECT_ROOT"
-          echo
 
-          if [ -f "$PROJECT_ROOT/settings.gradle" ] || \
-             [ -f "$PROJECT_ROOT/settings.gradle.kts" ]; then
-            echo "Gradle settings: FOUND"
-          else
-            echo "ERROR: Gradle settings file missing."
-            exit 1
-          fi
+          test -f "$PROJECT_ROOT/settings.gradle" || \
+          test -f "$PROJECT_ROOT/settings.gradle.kts"
 
-          if [ -f "$PROJECT_ROOT/app/build.gradle" ] || \
-             [ -f "$PROJECT_ROOT/app/build.gradle.kts" ]; then
-            echo "App Gradle file: FOUND"
-          else
-            echo "ERROR: app Gradle build file missing."
-            exit 1
-          fi
+          test -f "$PROJECT_ROOT/app/build.gradle" || \
+          test -f "$PROJECT_ROOT/app/build.gradle.kts"
 
-          if [ -d "$PROJECT_ROOT/app/src/main" ]; then
-            echo "app/src/main: FOUND"
-          else
-            echo "ERROR: app/src/main missing."
-            exit 1
-          fi
+          test -d "$PROJECT_ROOT/app/src/main"
 
           echo
-          echo "PROJECT VALIDATION PASSED."
+          echo "PROJECT VERIFICATION PASSED."
 
-      - name: Enable AndroidX
+          echo
+          echo "Project files:"
+          find "$PROJECT_ROOT" -maxdepth 3 -type f \
+            \( \
+              -name "settings.gradle" \
+              -o -name "settings.gradle.kts" \
+              -o -name "build.gradle" \
+              -o -name "build.gradle.kts" \
+              -o -name "AndroidManifest.xml" \
+              -o -name "google-services.json" \
+            \) \
+            -print | sort
+
+      - name: Configure AndroidX
         shell: bash
         run: |
           set -euo pipefail
 
           PROJECT_ROOT="$(cat "$GITHUB_WORKSPACE/.farmersmeet_project_root")"
 
-          PROPERTIES="$PROJECT_ROOT/gradle.properties"
+          PROPERTIES_FILE="$PROJECT_ROOT/gradle.properties"
 
-          touch "$PROPERTIES"
+          touch "$PROPERTIES_FILE"
 
-          if grep -q '^android.useAndroidX=' "$PROPERTIES"; then
+          if grep -q '^android.useAndroidX=' "$PROPERTIES_FILE"; then
             sed -i \
               's/^android.useAndroidX=.*/android.useAndroidX=true/' \
-              "$PROPERTIES"
+              "$PROPERTIES_FILE"
           else
             printf '%s\n' \
               'android.useAndroidX=true' \
-              >> "$PROPERTIES"
-          fi
-
-          if grep -q '^android.nonTransitiveRClass=' "$PROPERTIES"; then
-            sed -i \
-              's/^android.nonTransitiveRClass=.*/android.nonTransitiveRClass=true/' \
-              "$PROPERTIES"
-          else
-            printf '%s\n' \
-              'android.nonTransitiveRClass=true' \
-              >> "$PROPERTIES"
+              >> "$PROPERTIES_FILE"
           fi
 
           echo
           echo "AndroidX configuration:"
-          cat "$PROPERTIES"
+          cat "$PROPERTIES_FILE"
 
-      - name: Prepare Firebase configuration
+      - name: Verify Gradle wrapper
         shell: bash
         run: |
           set -euo pipefail
 
           PROJECT_ROOT="$(cat "$GITHUB_WORKSPACE/.farmersmeet_project_root")"
 
-          TARGET="$PROJECT_ROOT/app/google-services.json"
-
-          if [ -s "$TARGET" ]; then
-            echo "Firebase configuration already exists."
-            exit 0
-          fi
-
-          if [ -s "$GITHUB_WORKSPACE/Settings/google-services.json" ]; then
-            cp \
-              "$GITHUB_WORKSPACE/Settings/google-services.json" \
-              "$TARGET"
-
-            echo "Firebase configuration copied from Settings/."
-            exit 0
-          fi
-
-          if [ -s "$GITHUB_WORKSPACE/google-services.json" ]; then
-            cp \
-              "$GITHUB_WORKSPACE/google-services.json" \
-              "$TARGET"
-
-            echo "Firebase configuration copied from repository root."
-            exit 0
-          fi
-
-          echo "No additional Firebase configuration found."
-          echo "Continuing."
-
-      - name: Prepare Gradle wrapper
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          PROJECT_ROOT="$(cat "$GITHUB_WORKSPACE/.farmersmeet_project_root")"
-
-          cd "$PROJECT_ROOT"
-
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
+          if [ -f "$PROJECT_ROOT/gradlew" ]; then
+            chmod +x "$PROJECT_ROOT/gradlew"
             echo "Existing Gradle wrapper found."
           else
             echo "No Gradle wrapper found."
-            echo "Creating Gradle 8.10 wrapper."
+            echo "Generating Gradle 8.10 wrapper..."
+
+            cd "$PROJECT_ROOT"
 
             gradle wrapper \
               --gradle-version 8.10 \
               --distribution-type bin
 
-            chmod +x ./gradlew
+            chmod +x gradlew
           fi
 
-          test -x ./gradlew
+          echo
+          echo "Gradle wrapper:"
+          "$PROJECT_ROOT/gradlew" --version
 
-          echo "Gradle wrapper ready."
-
-      - name: Inspect Gradle tasks
+      - name: Show available Gradle tasks
         shell: bash
         run: |
           set -euo pipefail
@@ -316,22 +179,13 @@ jobs:
 
           cd "$PROJECT_ROOT"
 
-          echo "Gradle project:"
-          pwd
-
-          echo
-          echo "Gradle version:"
-          ./gradlew --version
-
-          echo
-          echo "Available tasks:"
           ./gradlew \
             --no-daemon \
             --stacktrace \
             tasks \
             --all
 
-      - name: Build Stage 10 APK
+      - name: Build FarmersMeet Debug APK
         shell: bash
         run: |
           set -euo pipefail
@@ -340,39 +194,36 @@ jobs:
 
           cd "$PROJECT_ROOT"
 
-          echo "=========================================="
-          echo " BUILDING FARMERSMEET STAGE 10"
-          echo "=========================================="
+          echo "Building debug APK..."
 
           ./gradlew \
             --no-daemon \
             --stacktrace \
             :app:assembleDebug
 
-      - name: Locate APK
+      - name: Find generated APK
         shell: bash
         run: |
           set -euo pipefail
 
           PROJECT_ROOT="$(cat "$GITHUB_WORKSPACE/.farmersmeet_project_root")"
 
-          echo "Searching for APK..."
+          echo "Searching for generated APK..."
 
-          APK="$(find "$PROJECT_ROOT" \
+          APK="$(find "$PROJECT_ROOT/app/build" \
             -type f \
             -name "*.apk" \
-            -path "*/build/outputs/*" \
             -print \
+            | sort \
             | head -n 1)"
 
           if [ -z "$APK" ]; then
+            echo "ERROR: No APK was generated."
 
             echo
-            echo "ERROR: No APK was produced."
-
-            echo
-            echo "Files under app/build:"
+            echo "Build directory:"
             find "$PROJECT_ROOT/app/build" \
+              -maxdepth 5 \
               -type f \
               -print 2>/dev/null || true
 
@@ -381,18 +232,14 @@ jobs:
 
           echo
           echo "=========================================="
-          echo " FARMERSMEET STAGE 10 APK CREATED"
+          echo " FARMERSMEET STAGE 10 APK READY"
           echo "=========================================="
           echo
-          echo "APK:"
-          echo "$APK"
-          echo
-
           ls -lh "$APK"
 
-          printf 'APK_PATH=%s\n' "$APK" >> "$GITHUB_ENV"
+          echo "APK_PATH=$APK" >> "$GITHUB_ENV"
 
-      - name: Upload Stage 10 APK
+      - name: Upload FarmersMeet Stage 10 APK
         uses: actions/upload-artifact@v4
         with:
           name: FarmersMeet-Stage-10-APK
