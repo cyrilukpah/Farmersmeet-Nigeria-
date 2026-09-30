@@ -1,4 +1,4 @@
-name: FarmersMeet Stage 10 APK
+name: FarmersMeet Stage 9 Publish
 
 on:
   workflow_dispatch:
@@ -11,12 +11,12 @@ permissions:
 
 jobs:
   build:
-    name: Build FarmersMeet Stage 10
+    name: Build FarmersMeet Stage 9
     runs-on: ubuntu-22.04
 
     steps:
 
-      - name: Checkout repository
+      - name: Checkout Stage 9
         uses: actions/checkout@v4
 
       - name: Set up Java 17
@@ -30,14 +30,14 @@ jobs:
         with:
           gradle-version: "8.10"
 
-      - name: Prepare FarmersMeet Stage 9 project
+      - name: Prepare Stage 9 Gradle project
         shell: bash
         run: |
           set -euo pipefail
 
           echo "=========================================="
-          echo " FARMERSMEET STAGE 10"
-          echo " PRESERVING STAGE 9 PROJECT"
+          echo " FARMERSMEET STAGE 9"
+          echo " PUBLISH BUILD"
           echo "=========================================="
 
           echo
@@ -45,7 +45,7 @@ jobs:
           pwd
 
           echo
-          echo "Checking Stage 9 project files..."
+          echo "Checking Stage 9 files..."
 
           test -f "settings.gradle"
           test -f "app/build.gradle"
@@ -56,13 +56,13 @@ jobs:
           echo "app/src/main found."
 
           echo
-          echo "Restoring root Gradle plugin configuration..."
+          echo "Restoring root Gradle configuration..."
 
           if [ -f "Settings/build.gradle" ]; then
             cp "Settings/build.gradle" "build.gradle"
-            echo "Root build.gradle restored from Settings/build.gradle."
+            echo "Root build.gradle restored."
           else
-            echo "ERROR: Settings/build.gradle is missing."
+            echo "ERROR: Settings/build.gradle not found."
             exit 1
           fi
 
@@ -72,28 +72,22 @@ jobs:
           if [ -s "app/google-services.json" ]; then
             echo "app/google-services.json already exists."
           elif [ -s "Settings/google-services.json" ]; then
-            cp "Settings/google-services.json" "app/google-services.json"
+            cp "Settings/google-services.json" \
+              "app/google-services.json"
+
             echo "Firebase configuration restored from Settings/."
           elif [ -s "google-services.json" ]; then
-            cp "google-services.json" "app/google-services.json"
+            cp "google-services.json" \
+              "app/google-services.json"
+
             echo "Firebase configuration found at repository root."
           else
-            echo "WARNING: google-services.json was not found."
-            echo "Continuing with the existing project."
+            echo "WARNING: google-services.json not found."
+            echo "Continuing with existing Stage 9 configuration."
           fi
 
           echo
-          echo "=========================================="
-          echo " PROJECT VERIFICATION"
-          echo "=========================================="
-
-          test -f "settings.gradle"
-          test -f "build.gradle"
-          test -f "app/build.gradle"
-          test -d "app/src/main"
-
-          echo
-          echo "Stage 9 project structure is ready."
+          echo "Stage 9 project verification passed."
 
       - name: Enable AndroidX
         shell: bash
@@ -121,8 +115,7 @@ jobs:
           fi
 
           echo
-          echo "Gradle properties:"
-          cat "$PROPERTIES_FILE"
+          echo "AndroidX configuration ready."
 
       - name: Prepare Gradle wrapper
         shell: bash
@@ -134,7 +127,7 @@ jobs:
             echo "Existing Gradle wrapper found."
           else
             echo "No Gradle wrapper found."
-            echo "Creating Gradle 8.10 wrapper..."
+            echo "Creating Gradle 8.10 wrapper."
 
             gradle wrapper \
               --gradle-version 8.10 \
@@ -145,15 +138,14 @@ jobs:
 
           test -x "./gradlew"
 
-          echo
           echo "Gradle wrapper ready."
 
-      - name: Verify Gradle project
+      - name: Verify Stage 9 Gradle project
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "Checking FarmersMeet Gradle project..."
+          echo "Checking Stage 9 Gradle tasks..."
 
           ./gradlew \
             --no-daemon \
@@ -161,47 +153,69 @@ jobs:
             :app:tasks
 
           echo
-          echo "Gradle project verification PASSED."
+          echo "Stage 9 Gradle verification PASSED."
 
-      - name: Build FarmersMeet Stage 10 APK
+      - name: Build Stage 9 release APK
         shell: bash
         run: |
           set -euo pipefail
 
           echo "=========================================="
-          echo " BUILDING FARMERSMEET STAGE 10 APK"
+          echo " BUILDING STAGE 9 RELEASE APK"
           echo "=========================================="
 
           ./gradlew \
             --no-daemon \
             --stacktrace \
-            :app:assembleDebug
+            :app:assembleRelease
 
           echo
-          echo "Gradle APK build completed."
+          echo "Stage 9 release APK build completed."
 
-      - name: Locate generated APK
+      - name: Build Stage 9 Android App Bundle
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "Searching for generated APK..."
+          echo "=========================================="
+          echo " BUILDING STAGE 9 ANDROID APP BUNDLE"
+          echo "=========================================="
 
-          APK="$(find "app/build/outputs/apk" \
+          ./gradlew \
+            --no-daemon \
+            --stacktrace \
+            :app:bundleRelease
+
+          echo
+          echo "Stage 9 App Bundle build completed."
+
+      - name: Locate Stage 9 release files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "=========================================="
+          echo " LOCATING STAGE 9 RELEASE FILES"
+          echo "=========================================="
+
+          APK="$(find app/build/outputs/apk \
             -type f \
             -name "*.apk" \
             -print \
             | sort \
-            | head -n 1)"
+            | head -n 1 || true)"
+
+          AAB="$(find app/build/outputs/bundle \
+            -type f \
+            -name "*.aab" \
+            -print \
+            | sort \
+            | head -n 1 || true)"
 
           if [ -z "$APK" ]; then
-            echo
-            echo "ERROR: No APK was generated."
+            echo "ERROR: Stage 9 release APK was not generated."
 
-            echo
-            echo "APK output directory:"
-            find "app/build" \
-              -maxdepth 8 \
+            find app/build \
               -type f \
               -name "*.apk" \
               -print 2>/dev/null || true
@@ -209,23 +223,43 @@ jobs:
             exit 1
           fi
 
-          echo
-          echo "=========================================="
-          echo " FARMERSMEET STAGE 10 APK READY"
-          echo "=========================================="
-          echo
-          echo "APK:"
-          echo "$APK"
-          echo
+          if [ -z "$AAB" ]; then
+            echo "ERROR: Stage 9 App Bundle was not generated."
 
+            find app/build \
+              -type f \
+              -name "*.aab" \
+              -print 2>/dev/null || true
+
+            exit 1
+          fi
+
+          echo
+          echo "STAGE 9 RELEASE APK:"
+          echo "$APK"
           ls -lh "$APK"
 
-          echo "APK_PATH=$APK" >> "$GITHUB_ENV"
+          echo
+          echo "STAGE 9 APP BUNDLE:"
+          echo "$AAB"
+          ls -lh "$AAB"
 
-      - name: Upload FarmersMeet Stage 10 APK
+          echo
+          echo "APK_PATH=$APK" >> "$GITHUB_ENV"
+          echo "AAB_PATH=$AAB" >> "$GITHUB_ENV"
+
+      - name: Upload Stage 9 release APK
         uses: actions/upload-artifact@v4
         with:
-          name: FarmersMeet-Stage-10-APK
+          name: FarmersMeet-Stage-9-Release-APK
           path: ${{ env.APK_PATH }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload Stage 9 Google Play App Bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: FarmersMeet-Stage-9-Release-AAB
+          path: ${{ env.AAB_PATH }}
           if-no-files-found: error
           retention-days: 30
